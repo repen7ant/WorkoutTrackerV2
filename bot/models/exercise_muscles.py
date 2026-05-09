@@ -1,10 +1,10 @@
-from sqlaclhemy import ForeignKey
+from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.models.base import Base
 
 
-class ExerciseMuscles(Base):
+class ExerciseMuscle(Base):
     """
     Связь упражнения с задействованными мышцами
     """

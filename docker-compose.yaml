@@ -28,5 +28,20 @@ services:
       - ./settings.toml:/app/settings.toml
       - ./bot:/app/bot
 
+  migrations:
+    container_name: migrations
+    environment:
+      - DB__URL=postgresql+asyncpg://tracker:workout_tracker@db:5432/workout_tracker
+    build: .
+    command: uv run alembic upgrade head
+    volumes:
+      - ./settings.toml:/app/settings.toml
+      - ./bot:/app/bot
+      - ./migrations:/app/migrations
+      - ./alembic.ini:/app/alembic.ini
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:

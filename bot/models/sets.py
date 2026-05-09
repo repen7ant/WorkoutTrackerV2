@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlaclhemy import ForeignKey, Numeric, SmallInteger
+from sqlalchemy import ForeignKey, Numeric, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.models.base import Base

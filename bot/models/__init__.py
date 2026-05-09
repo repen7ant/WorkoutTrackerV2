@@ -1,17 +1,17 @@
 from bot.models.base import Base
-from bot.models.exercise import Exercise
-from bot.models.exercise_muscle import ExerciseMuscle
-from bot.models.muscle import Muscle
-from bot.models.set import Set
-from bot.models.user import User
-from bot.models.workout import Workout
-from bot.models.workout_exercise import WorkoutExercise
+from bot.models.exercise_muscles import ExerciseMuscle
+from bot.models.exercises import Exercise
+from bot.models.muscles import Muscle
+from bot.models.sets import Set
+from bot.models.users import User
+from bot.models.workout_exercises import WorkoutExercise
+from bot.models.workouts import Workout
 
 __all__ = [
     "Base",
     "User",
-    "Exercise",
     "Muscle",
+    "Exercise",
     "ExerciseMuscle",
     "Workout",
     "WorkoutExercise",
