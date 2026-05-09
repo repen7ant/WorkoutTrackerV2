@@ -11,4 +11,3 @@ RUN uv sync --frozen --no-cache
 COPY . .
 
 CMD ["uv", "run", "-m", "bot"]
-

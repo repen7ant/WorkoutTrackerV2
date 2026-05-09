@@ -2,6 +2,8 @@ services:
   db:
     image: postgres:16-alpine
     container_name: postgres
+    ports:
+      - "5432:5432"
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -16,19 +18,17 @@ services:
       retries: 5
 
   migrations:
-    image: ghcr.io/${${GHCR_OWNER}}/workout-tracker:latest
+    image: ghcr.io/${GHCR_OWNER}/workout-tracker:latest
     container_name: migrations
     command: uv run alembic upgrade head
     volumes:
       - ./settings.toml:/app/settings.toml
-      - ./migrations:/app/migrations
-      - ./alembic.ini:/app/alembic.ini
     depends_on:
       db:
         condition: service_healthy
 
   seed:
-    image: ghcr.io/${GHCR_OWNER}}/workout-tracker:latest
+    image: ghcr.io/${GHCR_OWNER}/workout-tracker:latest
     container_name: seed
     command: uv run -m bot.data.seed
     volumes:
