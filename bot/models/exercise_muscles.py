@@ -11,6 +11,8 @@ class ExerciseMuscle(Base):
 
     __tablename__ = "exercise_muscles"
     exercise_id: Mapped[int] = mapped_column(
-        ForeignKey("exercises.id"), primary_key=True
+        ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True
     )
-    muscle_id: Mapped[int] = mapped_column(ForeignKey("muscles.id"), primary_key=True)
+    muscle_id: Mapped[int] = mapped_column(
+        ForeignKey("muscles.id", ondelete="CASCADE"), primary_key=True
+    )
