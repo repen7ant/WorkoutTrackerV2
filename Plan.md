@@ -30,8 +30,8 @@
 1. Инициализировать проект (uv init .) ✅
 2. Установить базовые зависомости (aiogram, python-dotenv) ✅
 3. Написать базового бота ✅
-4. Написать Dockerfile
-5. Написать docker-compose.yaml
+4. Написать Dockerfile ✅
+5. Написать docker-compose.yaml ✅
 
 ## 2. Проектирование БД и миграции
 
