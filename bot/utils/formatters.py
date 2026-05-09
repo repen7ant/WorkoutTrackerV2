@@ -3,12 +3,14 @@ from bot.models.muscles import Muscle
 from bot.models.workouts import Workout
 
 
-def format_exercise_list(exercises: list[tuple[Exercise, list[Muscle]]]) -> str:
+def format_exercise_list(
+    exercises: list[tuple[Exercise, list[Muscle]]], offset: int = 0
+) -> str:
     if not exercises:
         return "No exercises found."
 
     lines = ["<b>Exercises:</b>\n"]
-    for i, (exercise, muscles) in enumerate(exercises, start=1):
+    for i, (exercise, muscles) in enumerate(exercises, start=1 + offset):
         muscle_str = " · ".join(m.name for m in muscles) if muscles else "—"
         lines.append(f"{i}. {exercise.name}")
         lines.append(f"   {muscle_str}\n")

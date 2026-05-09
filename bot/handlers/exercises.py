@@ -33,7 +33,8 @@ async def send_exercise_page(
 ) -> None:
     repo = ExerciseRepository(session)
     exercises, total_pages = await repo.get_page(page, user_id, PER_PAGE)
-    text = format_exercise_list(exercises)
+    offset = (page - 1) * PER_PAGE
+    text = format_exercise_list(exercises, offset=offset)
     kb = exercises_menu_kb(page, total_pages)
 
     if isinstance(target, Message):
