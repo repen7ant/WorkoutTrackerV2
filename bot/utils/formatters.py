@@ -26,7 +26,8 @@ def format_exercise_log(
 
     lines = [f"<b>{exercise_name}</b>\n"]
     for session in sessions:
-        lines.append(f"<b>{session['date']}</b>")
+        date_str = session["date"].strftime("%d-%m-%y")
+        lines.append(f"<b>{date_str}</b>")
         if session["notes"]:
             lines.append(f"<i>{session['notes']}</i>")
         for i, s in enumerate(session["sets"], start=1):

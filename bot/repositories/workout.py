@@ -18,26 +18,26 @@ class WorkoutRepository:
         notes: str | None,
         exercises: list[dict],
     ) -> Workout:
-        async with self.session.begin():
-            workout = Workout(user_id=user_id, date=workout_date, notes=notes)
-            self.session.add(workout)
+        workout = Workout(user_id=user_id, date=workout_date, notes=notes)
+        self.session.add(workout)
+        await self.session.flush()
+
+        for position, exercise_data in enumerate(exercises, start=1):
+            we = WorkoutExercise(
+                workout_id=workout.id,
+                exercise_id=exercise_data["exercise_id"],
+                position=position,
+            )
+            self.session.add(we)
             await self.session.flush()
 
-            for position, exercise_data in enumerate(exercises, start=1):
-                we = WorkoutExercise(
-                    workout_id=workout.id,
-                    exercise_id=exercise_data["exercise_id"],
-                    position=position,
+            for set_data in exercise_data["sets"]:
+                s = Set(
+                    workout_exercise_id=we.id,
+                    reps=set_data["reps"],
+                    weight=set_data["weight"],
                 )
-                self.session.add(we)
-                await self.session.flush()
+                self.session.add(s)
 
-                for set_data in exercise_data["sets"]:
-                    s = Set(
-                        workout_exercise_id=we.id,
-                        reps=set_data["reps"],
-                        weight=set_data["weight"],
-                    )
-                    self.session.add(s)
-
+        await self.session.commit()
         return workout

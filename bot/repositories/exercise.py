@@ -5,6 +5,9 @@ from sqlalchemy.orm import selectinload
 from bot.models.exercise_muscles import ExerciseMuscle
 from bot.models.exercises import Exercise
 from bot.models.muscles import Muscle
+from bot.models.sets import Set
+from bot.models.workout_exercises import WorkoutExercise
+from bot.models.workouts import Workout
 
 
 class ExerciseRepository:
@@ -108,3 +111,36 @@ class ExerciseRepository:
         orphans = result.scalars().all()
         for muscle in orphans:
             await self.session.delete(muscle)
+
+    async def get_exercise_log(
+        self, exercise_id: int, user_id: int, limit: int = 20
+    ) -> list[dict]:
+        result = await self.session.execute(
+            select(Workout, WorkoutExercise, Set)
+            .join(WorkoutExercise, WorkoutExercise.workout_id == Workout.id)
+            .join(Set, Set.workout_exercise_id == WorkoutExercise.id)
+            .where(
+                WorkoutExercise.exercise_id == exercise_id,
+                Workout.user_id == user_id,
+            )
+            .order_by(Workout.date.asc())
+            .limit(limit)
+        )
+        rows = result.all()
+
+        sessions: dict[int, dict] = {}
+        for workout, we, s in rows:
+            if workout.id not in sessions:
+                sessions[workout.id] = {
+                    "date": workout.date,
+                    "notes": workout.notes,
+                    "sets": [],
+                }
+            sessions[workout.id]["sets"].append(
+                {
+                    "weight": s.weight,
+                    "reps": s.reps,
+                }
+            )
+
+        return list(sessions.values())
