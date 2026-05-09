@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrations:
+    image: ghcr.io/${{ github.repository_owner }}/workout-tracker:latest
+    container_name: migrations
+    command: uv run alembic upgrade head
+    volumes:
+      - ./settings.toml:/app/settings.toml
+      - ./migrations:/app/migrations
+      - ./alembic.ini:/app/alembic.ini
+    depends_on:
+      db:
+        condition: service_healthy
+
+  seed:
+    image: ghcr.io/${{ github.repository_owner }}/workout-tracker:latest
+    container_name: seed
+    command: uv run -m bot.data.seed
+    volumes:
+      - ./settings.toml:/app/settings.toml
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
+  bot:
+    image: ghcr.io/${{ github.repository_owner }}/workout-tracker:latest
+    container_name: workout-tracker
+    restart: unless-stopped
+    volumes:
+      - ./settings.toml:/app/settings.toml
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
