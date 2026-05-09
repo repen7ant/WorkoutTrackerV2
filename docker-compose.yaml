@@ -24,6 +24,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
     volumes:
       - ./settings.toml:/app/settings.toml
       - ./bot:/app/bot
@@ -31,7 +35,7 @@ services:
   migrations:
     container_name: migrations
     environment:
-      - DB__URL=postgresql+asyncpg://tracker:workout_tracker@db:5432/workout_tracker
+      - DB__URL=${DB_URL_INTERNAL}
     build: .
     command: uv run alembic upgrade head
     volumes:
@@ -42,6 +46,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  seed:
+    container_name: seed
+    build: .
+    command: uv run -m bot.data.seed
+    volumes:
+      - ./settings.toml:/app/settings.toml
+      - ./bot:/app/bot
+    environment:
+      - DB__URL=${DB_URL_INTERNAL}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
