@@ -9,6 +9,7 @@ from bot.db.session import AsyncSessionLocal
 from bot.handlers import get_routers
 from bot.logging_config import get_structlog_config
 from bot.middlewares.db import DbSessionMiddleware
+from bot.middlewares.user import UserMiddleware
 
 logger: FilteringBoundLogger = structlog.get_logger()
 
@@ -21,6 +22,7 @@ async def main() -> None:
 
     dp = Dispatcher()
     dp.update.middleware(DbSessionMiddleware(AsyncSessionLocal))
+    dp.update.middleware(UserMiddleware())
 
     dp.include_routers(*get_routers())
 
