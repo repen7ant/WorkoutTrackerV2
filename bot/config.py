@@ -20,6 +20,10 @@ class BotConfig(BaseModel):
     token: SecretStr
 
 
+class DatabaseConfig(BaseModel):
+    url: str
+
+
 class LogConfig(BaseModel):
     project_name: str
     show_datetime: bool
@@ -51,6 +55,7 @@ class Settings(BaseSettings):
     # Перечисляем, какие ключи ожидаются в конфиге
     bot: BotConfig
     logs: LogConfig
+    db: DatabaseConfig
 
     """
     Задаём параметры чтения конфига:

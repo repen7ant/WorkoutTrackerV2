@@ -21,6 +21,9 @@ services:
     container_name: workout-tracker
     network_mode: host # для проброса впн в контейнер
     build: .
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./settings.toml:/app/settings.toml
       - ./bot:/app/bot

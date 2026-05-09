@@ -1,6 +1,9 @@
 [bot]
 token = "1234567890:AaBbCcDdEeFfGrOoShAHhIiJjKkLlMmNnOo"
 
+[db]
+url = "postgresql+asyncpg://tracker:workout_tracker@db:5432/workout_tracker"
+# такой вариант будет работать только на сервере, локально нужно использовать localhost:5430
 
 [logs]
 project_name = "workout_tracker"
