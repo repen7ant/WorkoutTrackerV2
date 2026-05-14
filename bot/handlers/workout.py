@@ -232,7 +232,12 @@ async def cb_date_today(call: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(workout_date=date.today().isoformat())
     await state.set_state(WorkoutSession.entering_notes)
     await remove_kb(call)
-    await call.message.answer("Add notes or skip:", reply_markup=finish_notes_kb())
+
+    msg = await call.message.answer(
+        "Add notes or skip:", reply_markup=finish_notes_kb()
+    )
+    await state.update_data(notes_prompt_msg_id=msg.message_id)
+
     await call.answer()
 
 
@@ -256,7 +261,9 @@ async def enter_date(message: Message, state: FSMContext) -> None:
     await message.delete()
     await state.update_data(workout_date=parsed_date.isoformat())
     await state.set_state(WorkoutSession.entering_notes)
-    await message.answer("Add notes or skip:", reply_markup=finish_notes_kb())
+
+    msg = await message.answer("Add notes or skip:", reply_markup=finish_notes_kb())
+    await state.update_data(notes_prompt_msg_id=msg.message_id)
 
 
 # заметки — пропустить
@@ -264,8 +271,8 @@ async def enter_date(message: Message, state: FSMContext) -> None:
 async def cb_notes_skip(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await save_and_finish(call.message, state, session, db_user, notes=None)
     await remove_kb(call)
+    await save_and_finish(call.message, state, session, db_user, notes=None)
     await call.answer()
 
 
@@ -275,6 +282,18 @@ async def enter_notes(
     message: Message, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     await message.delete()
+
+    data = await state.get_data()
+    prompt_msg_id = data.get("notes_prompt_msg_id")
+
+    if prompt_msg_id:
+        try:
+            await message.bot.edit_message_reply_markup(
+                chat_id=message.chat.id, message_id=prompt_msg_id, reply_markup=None
+            )
+        except Exception:
+            pass
+
     await save_and_finish(message, state, session, db_user, notes=message.text.strip())
 
 
