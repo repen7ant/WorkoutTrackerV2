@@ -54,6 +54,6 @@ jobs:
           script: |
             cd ~/workout-tracker
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.SERVER_USER }} --password-stdin
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yaml pull
+            docker compose -f docker-compose.prod.yaml up -d
             docker image prune -f
