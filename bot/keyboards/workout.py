@@ -43,14 +43,25 @@ def finish_date_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="Today", callback_data="wk_date_today")
     builder.button(text="Enter date", callback_data="wk_date_custom")
+    builder.button(text="Back", callback_data="wk_back_to_main")
     builder.button(text="Cancel workout", callback_data="wk_cancel")
-    builder.adjust(2, 1)
+    builder.adjust(2, 1, 1)
     return builder.as_markup()
 
 
 def finish_notes_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="Skip", callback_data="wk_notes_skip")
+    builder.button(text="Back", callback_data="wk_back_to_date")
+    builder.button(text="Cancel workout", callback_data="wk_cancel")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def confirm_save_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Save workout", callback_data="wk_save")
+    builder.button(text="Edit notes", callback_data="wk_edit_notes")
     builder.button(text="Cancel workout", callback_data="wk_cancel")
     builder.adjust(1)
     return builder.as_markup()

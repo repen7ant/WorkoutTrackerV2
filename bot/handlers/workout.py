@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.workout import (
     ExerciseChoice,
+    confirm_save_kb,
     exercise_choices_kb,
     finish_date_kb,
     finish_notes_kb,
@@ -227,6 +229,24 @@ async def cb_finish(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+# назад в основное окно тренировки
+@router.callback_query(F.data == "wk_back_to_main", WorkoutSession.finishing)
+async def cb_back_to_main(call: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(WorkoutSession.active)
+    await send_workout_main(call, state)
+    await call.answer()
+
+
+# назад к выбору даты
+@router.callback_query(F.data == "wk_back_to_date", WorkoutSession.entering_notes)
+async def cb_back_to_date(call: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(workout_date=None, notes_prompt_msg_id=None, notes=None)
+    await state.set_state(WorkoutSession.finishing)
+    await call.message.delete()
+    await call.message.answer("Choose workout date:", reply_markup=finish_date_kb())
+    await call.answer()
+
+
 # дата — сегодня
 @router.callback_query(F.data == "wk_date_today", WorkoutSession.finishing)
 async def cb_date_today(call: CallbackQuery, state: FSMContext) -> None:
@@ -267,26 +287,39 @@ async def enter_date(message: Message, state: FSMContext) -> None:
     await state.update_data(notes_prompt_msg_id=msg.message_id)
 
 
-# заметки — пропустить
+def build_confirm_text(data: dict[str, Any]) -> str:
+    workout_date_raw = data.get("workout_date")
+    workout_date = (
+        date.fromisoformat(workout_date_raw).strftime("%d-%m-%y")
+        if workout_date_raw
+        else "—"
+    )
+    notes = data.get("notes") or "—"
+    return f"<b>Date:</b> {workout_date}\n<b>Notes:</b> {notes}\n\nSave workout?"
+
+
+# skip notes — к подтверждению
 @router.callback_query(F.data == "wk_notes_skip", WorkoutSession.entering_notes)
-async def cb_notes_skip(
-    call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
-) -> None:
+async def cb_notes_skip(call: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(notes=None)
+    await state.set_state(WorkoutSession.confirming)
     await remove_kb(call)
-    await save_and_finish(call.message, state, session, db_user, notes=None)
+    await call.message.answer(
+        build_confirm_text(await state.get_data()),
+        parse_mode="HTML",
+        reply_markup=confirm_save_kb(),
+    )
     await call.answer()
 
 
-# заметки — ввести
+# notes entered — к подтверждению
 @router.message(WorkoutSession.entering_notes)
-async def enter_notes(
-    message: Message, state: FSMContext, session: AsyncSession, db_user: User
-) -> None:
+async def enter_notes(message: Message, state: FSMContext) -> None:
     await message.delete()
-
+    await state.update_data(notes=message.text.strip())
+    await state.set_state(WorkoutSession.confirming)
     data = await state.get_data()
     prompt_msg_id = data.get("notes_prompt_msg_id")
-
     if prompt_msg_id:
         try:
             await message.bot.edit_message_reply_markup(
@@ -294,8 +327,33 @@ async def enter_notes(
             )
         except Exception:
             pass
+    await message.answer(
+        build_confirm_text(data),
+        parse_mode="HTML",
+        reply_markup=confirm_save_kb(),
+    )
 
-    await save_and_finish(message, state, session, db_user, notes=message.text.strip())
+
+# сохранять тренировку с окна подтверждения
+@router.callback_query(F.data == "wk_save", WorkoutSession.confirming)
+async def cb_save(
+    call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
+) -> None:
+    await remove_kb(call)
+    await save_and_finish(call.message, state, session, db_user)
+    await call.answer()
+
+
+# edit notes — назад к вводу заметок
+@router.callback_query(F.data == "wk_edit_notes", WorkoutSession.confirming)
+async def cb_edit_notes(call: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(WorkoutSession.entering_notes)
+    await call.message.delete()
+    msg = await call.message.answer(
+        "Add notes or skip:", reply_markup=finish_notes_kb()
+    )
+    await state.update_data(notes_prompt_msg_id=msg.message_id)
+    await call.answer()
 
 
 async def save_and_finish(
@@ -303,14 +361,13 @@ async def save_and_finish(
     state: FSMContext,
     session: AsyncSession,
     db_user: User,
-    notes: str | None,
 ) -> None:
     data = await state.get_data()
     repo = WorkoutRepository(session)
     await repo.save_workout(
         user_id=db_user.id,
         workout_date=date.fromisoformat(data["workout_date"]),
-        notes=notes,
+        notes=data.get("notes"),
         exercises=data["exercises"],
     )
     await state.clear()
@@ -321,8 +378,7 @@ async def save_and_finish(
 @router.callback_query(F.data == "wk_cancel")
 async def cb_cancel(call: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await remove_kb(call)
-    await call.message.edit_text("Workout cancelled.")
+    await call.message.edit_text("Workout cancelled.", reply_markup=None)
     await call.answer()
 
 
