@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.workout import (
     ExerciseChoice,
+    cancel_confirm_kb,
     confirm_save_kb,
     exercise_choices_kb,
     finish_date_kb,
@@ -377,8 +378,44 @@ async def save_and_finish(
 # отменить всю тренировку
 @router.callback_query(F.data == "wk_cancel")
 async def cb_cancel(call: CallbackQuery, state: FSMContext) -> None:
+    try:
+        await call.message.edit_reply_markup(reply_markup=cancel_confirm_kb())
+    except Exception:
+        pass
+    await call.answer()
+
+
+@router.callback_query(F.data == "wk_cancel_confirm")
+async def cb_cancel_confirm(call: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await call.message.edit_text("Workout cancelled.", reply_markup=None)
+    await call.answer()
+
+
+@router.callback_query(F.data == "wk_cancel_abort")
+async def cb_cancel_abort(call: CallbackQuery, state: FSMContext) -> None:
+    current = await state.get_state()
+    if current == WorkoutSession.active:
+        kb = workout_main_kb()
+    elif current == WorkoutSession.finishing:
+        kb = finish_date_kb()
+    elif current == WorkoutSession.entering_date:
+        await state.set_state(WorkoutSession.finishing)
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await call.message.answer("Choose workout date:", reply_markup=finish_date_kb())
+        await call.answer()
+        return
+    elif current == WorkoutSession.entering_notes:
+        kb = finish_notes_kb()
+    elif current == WorkoutSession.confirming:
+        kb = confirm_save_kb()
+    else:
+        await call.answer()
+        return
+    await call.message.edit_reply_markup(reply_markup=kb)
     await call.answer()
 
 

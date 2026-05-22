@@ -65,3 +65,11 @@ def confirm_save_kb() -> InlineKeyboardMarkup:
     builder.button(text="Cancel workout", callback_data="wk_cancel")
     builder.adjust(1)
     return builder.as_markup()
+
+
+def cancel_confirm_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Yes, cancel workout", callback_data="wk_cancel_confirm")
+    builder.button(text="No, go back", callback_data="wk_cancel_abort")
+    builder.adjust(1)
+    return builder.as_markup()
