@@ -86,6 +86,7 @@ class ExerciseRepository:
             select(Exercise)
             .options(selectinload(Exercise.muscles))
             .where(base_filter)
+            .order_by(Exercise.name)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )

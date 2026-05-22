@@ -4,14 +4,18 @@ Incline Bench Press,Upper Chest; Tricep; Shoulder
 Decline Bench Press,Lower Chest; Tricep; Shoulder
 Dumbbell Bench Press,Chest; Tricep; Shoulder
 Incline Dumbbell Bench Press,Chest; Tricep; Shoulder
+Decline Dumbbell Press,Lower Chest; Tricep; Shoulder
 Dumbbell Fly,Chest
 Chest Dip,Chest; Tricep
-Push Up,Chest; Tricep; Shoulder
+Push-Up,Chest; Tricep; Shoulder
 Cable Chest Fly,Chest
+Incline Cable Fly,Upper Chest
 Pec Deck Machine,Chest
 Cable Crossover High,Chest
 Cable Crossover Low,Chest
 Squat,Quadricep; Glute; Hamstring
+Box Squat,Quadricep; Glute; Hamstring
+Pause Squat,Quadricep; Glute; Hamstring
 Front Squat,Quadricep; Core
 Goblet Squat,Quadricep; Glute
 Hack Squat,Quadricep; Glute
@@ -21,7 +25,10 @@ Reverse Lunge,Quadricep; Glute
 Bulgarian Split Squat,Quadricep; Glute
 Step-Up,Quadricep; Glute
 Deadlift,Hamstring; Glute; Back
+Rack Pull,Hamstring; Glute; Back
 Romanian Deadlift,Hamstring; Glute
+Dumbbell Romanian Deadlift,Hamstring; Glute
+Single-Leg Romanian Deadlift,Hamstring; Glute
 Sumo Deadlift,Glute; Adductor; Back
 Trap Bar Deadlift,Glute; Hamstring; Back
 Good Morning,Hamstring; Lower Back
@@ -30,8 +37,8 @@ Hip Thrust,Glute; Hamstring
 Glute Bridge,Glute; Hamstring
 Cable Pull-Through,Glute; Hamstring
 Leg Extension,Quadricep
-Leg Curl Lying,Hamstring
-Leg Curl Seated,Hamstring
+Lying Leg Curl,Hamstring
+Seated Leg Curl,Hamstring
 Standing Calf Raise,Calf
 Seated Calf Raise,Calf
 Overhead Press,Shoulder; Tricep
@@ -49,20 +56,26 @@ Lat Pulldown,Back; Bicep
 Wide-Grip Pulldown,Lat; Upper Back
 Close-Grip Pulldown,Back; Bicep
 Seated Cable Row,Back; Bicep
+Straight-Arm Pulldown,Lat
 Chest-Supported Row,Back; Bicep
 T-Bar Row,Back; Bicep
-Pull Up,Back; Bicep
-Chin Up,Back; Bicep
+Pull-Up,Back; Bicep
+Chin-Up,Back; Bicep
 Inverted Row,Back; Bicep
 Face Pull,Rear Delt; Upper Back
 Cable Row High,Upper Back
 Cable Row Low,Mid Back
+Dumbbell Curl,Bicep
 Barbell Curl,Bicep
 Hammer Curl,Bicep; Forearm
 Preacher Curl,Bicep
 Cable Curl,Bicep
 Incline Dumbbell Curl,Bicep
 Concentration Curl,Bicep
+Reverse Curl,Bicep; Forearm
+Close-Grip Bench Press,Tricep; Chest
+Floor Press,Chest; Tricep; Shoulder
+Tricep Dip,Tricep; Chest
 Tricep Pushdown,Tricep
 Overhead Tricep Extension,Tricep
 Skullcrusher,Tricep
@@ -85,8 +98,8 @@ Landmine Twist,Core
 Hip Abduction Machine,Glute
 Hip Adduction Machine,Adductor
 Seated Row Machine,Back; Bicep
-Lat Machine Pull-Over,Lat
-Cable Pull-Over,Lat
+Machine Pullover,Lat
+Cable Pullover,Lat
 Wrist Curl,Forearm
 Wrist Extension,Forearm
 Glute-Ham Raise,Hamstring; Glute; Lower Back
