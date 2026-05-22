@@ -124,8 +124,9 @@ async def cb_exercise_chosen(
     )
     log_text = format_exercise_log(callback_data.exercise_name, log)
     await remove_kb(call)
+    await call.message.answer(log_text, parse_mode="HTML")
     sent = await call.message.answer(
-        f"{log_text}\n\nEnter set (e.g. <code>100x5</code> or <code>BWx10</code>):",
+        "Enter set (e.g. <code>100x5</code> or <code>BWx10</code>):",
         parse_mode="HTML",
         reply_markup=set_entered_kb(),
     )
@@ -156,7 +157,7 @@ async def enter_set(message: Message, state: FSMContext) -> None:
     current_sets.append({"weight": weight, "reps": reps})
     await state.update_data(current_sets=current_sets)
 
-    lines = [f"<b>{data['current_exercise_name']}</b>\n"]
+    lines = []
     for i, s in enumerate(current_sets, start=1):
         w = "BW" if s["weight"] is None else f"{s['weight']}kg"
         lines.append(f"  {i}. {w} x {s['reps']}")
