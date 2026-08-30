@@ -123,7 +123,7 @@ async def cb_exercise_chosen(
     log = await repo.get_exercise_log(
         exercise_id=callback_data.exercise_id,
         user_id=db_user.id,
-        limit=20,
+        limit=10,
     )
     log_text = format_exercise_log(callback_data.exercise_name, log)
     await remove_kb(call)
@@ -160,10 +160,10 @@ async def enter_set(message: Message, state: FSMContext) -> None:
     current_sets.append({"weight": weight, "reps": reps})
     await state.update_data(current_sets=current_sets)
 
-    lines = []
+    lines = ["<b>Current workout:</b>\n"]
     for i, s in enumerate(current_sets, start=1):
         w = "BW" if s["weight"] is None else f"{s['weight']}kg"
-        lines.append(f"  {i}. {w} x {s['reps']}")
+        lines.append(f"{i}. {w} x {s['reps']}")
     text = "\n".join(lines) + "\n\nEnter next set or finish exercise:"
 
     await message.delete()  # удаляем сообщение пользователя

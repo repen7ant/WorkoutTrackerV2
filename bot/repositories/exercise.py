@@ -114,18 +114,31 @@ class ExerciseRepository:
             await self.session.delete(muscle)
 
     async def get_exercise_log(
-        self, exercise_id: int, user_id: int, limit: int = 20
+        self, exercise_id: int, user_id: int, limit: int = 10
     ) -> list[dict]:
+        recent_workouts = (
+            select(Workout.id)
+            .where(
+                Workout.user_id == user_id,
+                Workout.id.in_(
+                    select(WorkoutExercise.workout_id).where(
+                        WorkoutExercise.exercise_id == exercise_id
+                    )
+                ),
+            )
+            .order_by(Workout.date.desc(), Workout.id.desc())
+            .limit(limit)
+        )
+
         result = await self.session.execute(
             select(Workout, WorkoutExercise, Set)
             .join(WorkoutExercise, WorkoutExercise.workout_id == Workout.id)
             .join(Set, Set.workout_exercise_id == WorkoutExercise.id)
             .where(
                 WorkoutExercise.exercise_id == exercise_id,
-                Workout.user_id == user_id,
+                Workout.id.in_(recent_workouts),
             )
-            .order_by(Workout.date.asc())
-            .limit(limit)
+            .order_by(Workout.date.asc(), Workout.id.asc(), Set.id.asc())
         )
         rows = result.all()
 
