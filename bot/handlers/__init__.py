@@ -1,6 +1,6 @@
 from aiogram import Router
 
-from . import exercises, history, start, workout
+from . import exercises, export, history, start, workout
 
 
 def get_routers() -> list[Router]:
@@ -8,5 +8,6 @@ def get_routers() -> list[Router]:
         exercises.router,
         workout.router,
         history.router,
+        export.router,
         start.router,
     ]

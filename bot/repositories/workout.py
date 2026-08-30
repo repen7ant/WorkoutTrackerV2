@@ -3,7 +3,9 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.models.exercise_muscles import ExerciseMuscle
 from bot.models.exercises import Exercise
+from bot.models.muscles import Muscle
 from bot.models.sets import Set
 from bot.models.workout_exercises import WorkoutExercise
 from bot.models.workouts import Workout
@@ -86,3 +88,68 @@ class WorkoutRepository:
                 }
             )
         return list(exercises.values())
+
+    async def get_workouts_for_export(
+        self, user_id: int, since: date | None
+    ) -> list[dict]:
+        """Все тренировки пользователя с упражнениями, мышцами и подходами.
+
+        Отсортированы от старых к новым; внутри тренировки упражнения идут
+        в порядке выполнения, подходы — в порядке ввода.
+        """
+        filters = [Workout.user_id == user_id]
+        if since is not None:
+            filters.append(Workout.date >= since)
+
+        result = await self.session.execute(
+            select(Workout, WorkoutExercise, Exercise, Set)
+            .join(WorkoutExercise, WorkoutExercise.workout_id == Workout.id)
+            .join(Exercise, Exercise.id == WorkoutExercise.exercise_id)
+            .join(Set, Set.workout_exercise_id == WorkoutExercise.id)
+            .where(*filters)
+            .order_by(
+                Workout.date.asc(),
+                Workout.id.asc(),
+                WorkoutExercise.position.asc(),
+                Set.id.asc(),
+            )
+        )
+        rows = result.all()
+        if not rows:
+            return []
+
+        muscles = await self._get_exercise_muscles({ex.id for _, _, ex, _ in rows})
+
+        workouts: dict[int, dict] = {}
+        entries: dict[int, dict] = {}
+        for workout, we, exercise, s in rows:
+            if workout.id not in workouts:
+                workouts[workout.id] = {
+                    "date": workout.date,
+                    "notes": workout.notes,
+                    "exercises": [],
+                }
+            if we.id not in entries:
+                entries[we.id] = {
+                    "name": exercise.name,
+                    "muscles": muscles.get(exercise.id, []),
+                    "sets": [],
+                }
+                workouts[workout.id]["exercises"].append(entries[we.id])
+            entries[we.id]["sets"].append({"weight": s.weight, "reps": s.reps})
+
+        return list(workouts.values())
+
+    async def _get_exercise_muscles(
+        self, exercise_ids: set[int]
+    ) -> dict[int, list[str]]:
+        result = await self.session.execute(
+            select(ExerciseMuscle.exercise_id, Muscle.name)
+            .join(Muscle, Muscle.id == ExerciseMuscle.muscle_id)
+            .where(ExerciseMuscle.exercise_id.in_(exercise_ids))
+            .order_by(Muscle.name)
+        )
+        muscles: dict[int, list[str]] = {}
+        for exercise_id, name in result.all():
+            muscles.setdefault(exercise_id, []).append(name)
+        return muscles
