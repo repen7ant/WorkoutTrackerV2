@@ -44,36 +44,6 @@ def format_exercise_log(
     return "\n".join(lines)
 
 
-def format_workout_summary(
-    exercises: list[dict],  # данные из FSM перед сохранением
-    exercise_names: dict[int, str],  # {exercise_id: name}
-) -> str:
-    if not exercises:
-        return "No exercises recorded."
-
-    lines = ["<b>Workout summary:</b>\n"]
-    for ex in exercises:
-        name = exercise_names.get(ex["exercise_id"], "Unknown")
-        lines.append(f"<b>{name}</b>")
-        for i, s in enumerate(ex["sets"], start=1):
-            weight = "BW" if s["weight"] is None else f"{s['weight']}kg"
-            lines.append(f"  {i}. {weight} x {s['reps']}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def format_workout_list(workouts: list[Workout]) -> str:
-    if not workouts:
-        return "No workouts yet."
-    lines = ["<b>Workout history:</b>\n"]
-    for w in workouts:
-        date_str = w.date.strftime("%d-%m-%y")
-        notes_str = f" — {w.notes}" if w.notes else ""
-        lines.append(f"{date_str}{notes_str}")
-    return "\n".join(lines)
-
-
 def format_workout_detail(workout: Workout, exercises: list[dict]) -> str:
     date_str = workout.date.strftime("%d-%m-%y")
     lines = [f"<b>{date_str}</b>"]

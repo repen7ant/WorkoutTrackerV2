@@ -32,6 +32,10 @@ router = Router(name="workout")
 # Границы берутся из схемы (models/sets.py): вес — Numeric(5, 2), повторения —
 # SmallInteger. Всё, что не влезает, раньше доходило до INSERT и роняло
 # сохранение уже собранной тренировки.
+# Эти команды обязаны работать и посреди ввода: иначе /history во время
+# заметок молча становится текстом заметки, а /start — подходом.
+BOT_COMMANDS = Command("start", "workout", "exercises", "history", "export")
+
 MAX_WEIGHT = Decimal("999.99")
 WEIGHT_STEP = Decimal("0.01")
 MAX_REPS = 32767
@@ -120,14 +124,17 @@ async def choose_exercise(
     message: Message, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     repo = ExerciseRepository(session)
-    exercises = await repo.search_by_name(message.text, db_user.id)
+    exercises, total = await repo.search_by_name(message.text, db_user.id)
     await message.delete()
     if not exercises:
         await message.answer("Nothing found. Try again:")
         return
-    await message.answer(
-        "Select exercise:", reply_markup=exercise_choices_kb(exercises)
+    header = (
+        f"Select exercise (showing {len(exercises)} of {total}, refine the search):"
+        if total > len(exercises)
+        else "Select exercise:"
     )
+    await message.answer(header, reply_markup=exercise_choices_kb(exercises))
 
 
 # выбор упражнения из списка
@@ -140,12 +147,16 @@ async def cb_exercise_chosen(
     db_user: User,
 ) -> None:
     repo = ExerciseRepository(session)
+    exercise = await repo.get_for_user(callback_data.exercise_id, db_user.id)
+    if exercise is None:
+        await call.answer("Exercise not found.", show_alert=True)
+        return
     log = await repo.get_exercise_log(
-        exercise_id=callback_data.exercise_id,
+        exercise_id=exercise.id,
         user_id=db_user.id,
         limit=10,
     )
-    log_text = format_exercise_log(callback_data.exercise_name, log)
+    log_text = format_exercise_log(exercise.name, log)
     await remove_kb(call)
     await call.message.answer(log_text, parse_mode="HTML")
     sent = await call.message.answer(
@@ -155,8 +166,8 @@ async def cb_exercise_chosen(
     )
     await state.set_state(WorkoutSession.entering_sets)
     await state.update_data(
-        current_exercise_id=callback_data.exercise_id,
-        current_exercise_name=callback_data.exercise_name,
+        current_exercise_id=exercise.id,
+        current_exercise_name=exercise.name,
         current_sets=[],
         sets_message_id=sent.message_id,
         last_msg_id=sent.message_id,
@@ -216,7 +227,7 @@ async def show_sets(
 
 
 # ввод подхода
-@router.message(WorkoutSession.entering_sets)
+@router.message(WorkoutSession.entering_sets, ~BOT_COMMANDS)
 async def enter_set(message: Message, state: FSMContext) -> None:
     parsed = parse_set(message.text)
     if parsed is None:
@@ -347,7 +358,7 @@ async def cb_date_custom(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
-@router.message(WorkoutSession.entering_date)
+@router.message(WorkoutSession.entering_date, ~BOT_COMMANDS)
 async def enter_date(message: Message, state: FSMContext) -> None:
     try:
         parsed_date = datetime.strptime(message.text.strip(), "%d-%m-%y").date()
@@ -389,7 +400,7 @@ async def cb_notes_skip(call: CallbackQuery, state: FSMContext) -> None:
 
 
 # notes entered — к подтверждению
-@router.message(WorkoutSession.entering_notes)
+@router.message(WorkoutSession.entering_notes, ~BOT_COMMANDS)
 async def enter_notes(message: Message, state: FSMContext) -> None:
     await message.delete()
     await state.update_data(notes=message.text.strip())

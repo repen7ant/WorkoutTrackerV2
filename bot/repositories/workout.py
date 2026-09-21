@@ -58,7 +58,8 @@ class WorkoutRepository:
         result = await self.session.execute(
             select(Workout)
             .where(Workout.user_id == user_id)
-            .order_by(Workout.date.desc())
+            # id как тай-брейк: без него тренировки одной даты прыгают между страницами
+            .order_by(Workout.date.desc(), Workout.id.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
         )

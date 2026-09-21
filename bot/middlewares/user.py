@@ -29,6 +29,11 @@ class UserMiddleware(BaseMiddleware):
             )
             session.add(db_user)
             await session.commit()
+        elif db_user.username != user.username:
+            # username в Telegram меняется, а в БД оставался тем, что был при
+            # первой встрече
+            db_user.username = user.username
+            await session.commit()
 
         data["db_user"] = db_user
         return await handler(event, data)

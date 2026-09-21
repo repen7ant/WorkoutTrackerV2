@@ -14,16 +14,51 @@ class ExerciseRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def search_by_name(self, query: str, user_id: int) -> list[Exercise]:
+    async def search_by_name(
+        self, query: str, user_id: int, limit: int = 20
+    ) -> tuple[list[Exercise], int]:
+        """Совпадения и их общее число: по короткому запросу их могут быть сотни,
+        а Telegram не покажет ни такую клавиатуру, ни такое сообщение."""
         base_filter = Exercise.user_id.is_(None) | (Exercise.user_id == user_id)
+        name_filter = Exercise.name.ilike(f"%{query}%")
+
+        total_result = await self.session.execute(
+            select(func.count(Exercise.id)).where(base_filter, name_filter)
+        )
+        total = total_result.scalar_one()
+
         result = await self.session.execute(
             select(Exercise)
             .options(selectinload(Exercise.muscles))
-            .where(base_filter, Exercise.name.ilike(f"%{query}%"))
+            .where(base_filter, name_filter)
+            .order_by(Exercise.name)
+            .limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.scalars().all()), total
 
-    async def add(self, name: str, user_id: int, muscle_names: list[str]) -> Exercise:
+    async def get_for_user(self, exercise_id: int, user_id: int) -> Exercise | None:
+        """Упражнение, доступное этому пользователю: своё или общее."""
+        result = await self.session.execute(
+            select(Exercise).where(
+                Exercise.id == exercise_id,
+                Exercise.user_id.is_(None) | (Exercise.user_id == user_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def add(
+        self, name: str, user_id: int, muscle_names: list[str]
+    ) -> Exercise | None:
+        """None, если упражнение с таким названием уже доступно пользователю."""
+        existing = await self.session.execute(
+            select(Exercise).where(
+                Exercise.name.ilike(name),
+                Exercise.user_id.is_(None) | (Exercise.user_id == user_id),
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            return None
+
         exercise = Exercise(name=name, user_id=user_id)
         self.session.add(exercise)
         await self.session.flush()
@@ -53,6 +88,7 @@ class ExerciseRepository:
             .options(selectinload(Exercise.muscles))
             .join(ExerciseMuscle)
             .where(base_filter, ExerciseMuscle.muscle_id == muscle_id)
+            .order_by(Exercise.name)
         )
         return list(result.scalars().all())
 
@@ -95,13 +131,15 @@ class ExerciseRepository:
 
     async def get_user_exercises(self, user_id: int) -> list[Exercise]:
         result = await self.session.execute(
-            select(Exercise).where(Exercise.user_id == user_id)
+            select(Exercise).where(Exercise.user_id == user_id).order_by(Exercise.name)
         )
         return list(result.scalars().all())
 
     async def get_all_muscles(self, user_id: int) -> list[Muscle]:
         result = await self.session.execute(
-            select(Muscle).where(Muscle.user_id.is_(None) | (Muscle.user_id == user_id))
+            select(Muscle)
+            .where(Muscle.user_id.is_(None) | (Muscle.user_id == user_id))
+            .order_by(Muscle.name)
         )
         return list(result.scalars().all())
 

@@ -88,17 +88,15 @@ async def search_query(
     message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     repo = ExerciseRepository(session)
-    exercises = await repo.search_by_name(message.text, db_user.id)
+    exercises, total = await repo.search_by_name(message.text, db_user.id)
     await ex_state.clear()
     if not exercises:
         await message.answer("Nothing found.", reply_markup=search_result_kb())
         return
-    result = [(ex, ex.muscles) for ex in exercises]
-    await message.answer(
-        format_exercise_list(result),
-        parse_mode="HTML",
-        reply_markup=search_result_kb(),
-    )
+    text = format_exercise_list([(ex, ex.muscles) for ex in exercises])
+    if total > len(exercises):
+        text += f"\n\nShowing {len(exercises)} of {total}. Refine the search."
+    await message.answer(text, parse_mode="HTML", reply_markup=search_result_kb())
 
 
 # фильтр по мышцам
@@ -165,9 +163,18 @@ async def add_muscles(
         if message.text.strip() == "—"
         else [m.strip() for m in message.text.split(",")]
     )
-    await repo.add(name=data["name"], user_id=db_user.id, muscle_names=muscle_names)
+    exercise = await repo.add(
+        name=data["name"], user_id=db_user.id, muscle_names=muscle_names
+    )
     await ex_state.clear()
-    await message.answer(f"Exercise <b>{data['name']}</b> added.", parse_mode="HTML")
+    if exercise is None:
+        await message.answer(
+            f"Exercise <b>{data['name']}</b> already exists.", parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            f"Exercise <b>{data['name']}</b> added.", parse_mode="HTML"
+        )
     await send_exercise_page(message, session, page=1, user_id=db_user.id)
 
 

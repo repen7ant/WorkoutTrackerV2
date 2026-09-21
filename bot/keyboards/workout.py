@@ -4,8 +4,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
 class ExerciseChoice(CallbackData, prefix="wk_ex"):
+    # только id: у callback_data лимит 64 байта, и название на кириллице
+    # длиннее ~28 символов в него уже не влезало
     exercise_id: int
-    exercise_name: str
 
 
 def workout_main_kb() -> InlineKeyboardMarkup:
@@ -22,9 +23,7 @@ def exercise_choices_kb(exercises: list) -> InlineKeyboardMarkup:
     for ex in exercises:
         builder.button(
             text=ex.name,
-            callback_data=ExerciseChoice(
-                exercise_id=ex.id, exercise_name=ex.name
-            ).pack(),
+            callback_data=ExerciseChoice(exercise_id=ex.id).pack(),
         )
     builder.button(text="Cancel", callback_data="wk_cancel_exercise")
     builder.adjust(1)
