@@ -144,8 +144,60 @@ async def cb_exercise_chosen(
         current_exercise_name=callback_data.exercise_name,
         current_sets=[],
         sets_message_id=sent.message_id,
+        last_msg_id=sent.message_id,
     )
     await call.answer()
+
+
+def format_current_sets(sets: list[dict[str, Any]]) -> str:
+    lines = ["<b>Current workout:</b>\n"]
+    for i, s in enumerate(sets, start=1):
+        weight = "BW" if s["weight"] is None else f"{s['weight']}kg"
+        lines.append(f"{i}. {weight} x {s['reps']}")
+    return "\n".join(lines) + "\n\nEnter next set or finish exercise:"
+
+
+async def show_sets(
+    message: Message,
+    state: FSMContext,
+    data: dict[str, Any],
+    text: str,
+    user_message_deleted: bool,
+) -> None:
+    """
+    Показывает список подходов, удерживая его внизу чата.
+
+    Пока промпт — последнее сообщение, правим его на месте: так ничего не мигает.
+    Но между промптом и вводом могло что-то вклиниться — /exercises, /history,
+    ошибка формата, неудалённое сообщение самого пользователя. Тогда промпт
+    уехал вверх, и правка в нём пользователю не видна: он вводит подход и не
+    получает никакого отклика. В этом случае пересоздаём сообщение внизу.
+    """
+    prompt_id = data["sets_message_id"]
+    # message_id внутри чата идут подряд: если ввод пришёл следующим номером,
+    # значит после промпта никто больше ничего не присылал
+    still_last = (
+        user_message_deleted
+        and message.message_id == data.get("last_msg_id", prompt_id) + 1
+    )
+    if still_last:
+        with suppress(TelegramBadRequest):
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=prompt_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=set_entered_kb(),
+            )
+            await state.update_data(last_msg_id=message.message_id)
+            return
+
+    with suppress(TelegramBadRequest):
+        await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_id)
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=set_entered_kb())
+    await state.update_data(
+        sets_message_id=sent.message_id, last_msg_id=sent.message_id
+    )
 
 
 # ввод подхода
@@ -165,19 +217,21 @@ async def enter_set(message: Message, state: FSMContext) -> None:
     current_sets.append({"weight": weight, "reps": reps})
     await state.update_data(current_sets=current_sets)
 
-    lines = ["<b>Current workout:</b>\n"]
-    for i, s in enumerate(current_sets, start=1):
-        w = "BW" if s["weight"] is None else f"{s['weight']}kg"
-        lines.append(f"{i}. {w} x {s['reps']}")
-    text = "\n".join(lines) + "\n\nEnter next set or finish exercise:"
+    # Telegram не даёт боту удалять сообщения старше 48 часов: если тренировку
+    # оставили открытой на двое суток, сообщение останется в чате ниже промпта
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        deleted = False
+    else:
+        deleted = True
 
-    await message.delete()  # удаляем сообщение пользователя
-    await message.bot.edit_message_text(
-        chat_id=message.chat.id,
-        message_id=data["sets_message_id"],
-        text=text,
-        parse_mode="HTML",
-        reply_markup=set_entered_kb(),
+    await show_sets(
+        message,
+        state,
+        data,
+        format_current_sets(current_sets),
+        user_message_deleted=deleted,
     )
 
 
