@@ -24,6 +24,13 @@ class DatabaseConfig(BaseModel):
     url: str
 
 
+class RedisConfig(BaseModel):
+    # Хранилище FSM. Дефолт рассчитан на docker-compose, где бот и redis
+    # в одной сети; локально бот ходит через host-сеть, поэтому там нужен
+    # localhost — см. settings.example.toml.
+    url: str = "redis://redis:6379/0"
+
+
 class LogConfig(BaseModel):
     project_name: str
     show_datetime: bool
@@ -56,6 +63,7 @@ class Settings(BaseSettings):
     bot: BotConfig
     logs: LogConfig
     db: DatabaseConfig
+    redis: RedisConfig = RedisConfig()
 
     """
     Задаём параметры чтения конфига:

@@ -17,12 +17,31 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    # appendonly + том: без них рестарт redis теряет как раз то,
+    # ради чего он тут — незавершённую тренировку в FSM.
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   bot:
     container_name: workout-tracker
     network_mode: host # для проброса впн в контейнер
     build: .
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
@@ -62,3 +81,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

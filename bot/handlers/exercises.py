@@ -1,9 +1,10 @@
 from aiogram import F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.filters import ExState
 from bot.keyboards.exercises import (
     ExerciseDelete,
     ExerciseDeleteConfirm,
@@ -19,10 +20,17 @@ from bot.models.exercises import Exercise as ExerciseModel
 from bot.models.users import User
 from bot.repositories.exercise import ExerciseRepository
 from bot.states.exercises import ExerciseAdd, ExerciseSearch
+from bot.states.workout import WorkoutSession
 from bot.utils.formatters import format_exercise_list
 
 router = Router(name="exercises")
 PER_PAGE = 20
+
+# Диалоги упражнений живут на своей FSM-дорожке (ex_state) и не трогают
+# состояние тренировки. Но текстовое сообщение — общий ресурс: если тренировка
+# ждёт ввод, он принадлежит ей. В WorkoutSession.active тренировка управляется
+# кнопками, текст ей не нужен.
+WORKOUT_IDLE = StateFilter(None, WorkoutSession.active)
 
 
 async def send_exercise_page(
@@ -69,19 +77,19 @@ async def cb_noop(call: CallbackQuery) -> None:
 
 # поиск
 @router.callback_query(F.data == "ex_search")
-async def cb_search(call: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(ExerciseSearch.waiting_query)
+async def cb_search(call: CallbackQuery, ex_state: FSMContext) -> None:
+    await ex_state.set_state(ExerciseSearch.waiting_query)
     await call.message.answer("Enter exercise name:")
     await call.answer()
 
 
-@router.message(ExerciseSearch.waiting_query)
+@router.message(ExState(ExerciseSearch.waiting_query), WORKOUT_IDLE)
 async def search_query(
-    message: Message, state: FSMContext, session: AsyncSession, db_user: User
+    message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     repo = ExerciseRepository(session)
     exercises = await repo.search_by_name(message.text, db_user.id)
-    await state.clear()
+    await ex_state.clear()
     if not exercises:
         await message.answer("Nothing found.", reply_markup=search_result_kb())
         return
@@ -131,26 +139,26 @@ async def cb_filter_cancel(
 
 # добавление
 @router.callback_query(F.data == "ex_add")
-async def cb_add(call: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(ExerciseAdd.waiting_name)
+async def cb_add(call: CallbackQuery, ex_state: FSMContext) -> None:
+    await ex_state.set_state(ExerciseAdd.waiting_name)
     await call.message.answer("Enter exercise name:")
     await call.answer()
 
 
-@router.message(ExerciseAdd.waiting_name)
-async def add_name(message: Message, state: FSMContext) -> None:
-    await state.update_data(name=message.text.strip())
-    await state.set_state(ExerciseAdd.waiting_muscles)
+@router.message(ExState(ExerciseAdd.waiting_name), WORKOUT_IDLE)
+async def add_name(message: Message, ex_state: FSMContext) -> None:
+    await ex_state.update_data(name=message.text.strip())
+    await ex_state.set_state(ExerciseAdd.waiting_muscles)
     await message.answer(
         "Enter muscles separated by comma (e.g. Chest, Tricep):\nor send — to skip"
     )
 
 
-@router.message(ExerciseAdd.waiting_muscles)
+@router.message(ExState(ExerciseAdd.waiting_muscles), WORKOUT_IDLE)
 async def add_muscles(
-    message: Message, state: FSMContext, session: AsyncSession, db_user: User
+    message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    data = await state.get_data()
+    data = await ex_state.get_data()
     repo = ExerciseRepository(session)
     muscle_names = (
         []
@@ -158,7 +166,7 @@ async def add_muscles(
         else [m.strip() for m in message.text.split(",")]
     )
     await repo.add(name=data["name"], user_id=db_user.id, muscle_names=muscle_names)
-    await state.clear()
+    await ex_state.clear()
     await message.answer(f"Exercise <b>{data['name']}</b> added.", parse_mode="HTML")
     await send_exercise_page(message, session, page=1, user_id=db_user.id)
 

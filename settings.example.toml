@@ -5,6 +5,12 @@ token = "1234567890:AaBbCcDdEeFfGrOoShAHhIiJjKkLlMmNnOo"
 url = "postgresql+asyncpg://tracker:workout_tracker@db:5432/workout_tracker"
 # такой вариант будет работать только на сервере, локально нужно использовать localhost:5430
 
+[redis]
+# хранилище FSM: переживает рестарт бота вместе с незавершённой тренировкой
+url = "redis://redis:6379/0"
+# аналогично db: на сервере бот в одной сети с redis, локально он в host-сети,
+# поэтому там нужно redis://localhost:6379/0
+
 [logs]
 project_name = "workout_tracker"
 show_datetime = true
