@@ -14,6 +14,7 @@ from bot.logging_config import get_structlog_config
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.fsm import EXERCISES_DESTINY, SubFSMMiddleware
 from bot.middlewares.user import UserMiddleware
+from bot.utils import fsm_json
 
 logger: FilteringBoundLogger = structlog.get_logger()
 
@@ -30,6 +31,9 @@ async def main() -> None:
     storage = RedisStorage.from_url(
         settings.redis.url,
         key_builder=DefaultKeyBuilder(with_destiny=True),
+        # без этого вес подхода (Decimal) не переживает json.dumps
+        json_dumps=fsm_json.dumps,
+        json_loads=fsm_json.loads,
     )
 
     dp = Dispatcher(storage=storage)
