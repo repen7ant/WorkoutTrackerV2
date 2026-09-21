@@ -6,3 +6,6 @@ settings.example.toml
 .github
 docker-compose.yaml
 Dockerfile
+.venv/
+.ruff_cache/
+settings.toml

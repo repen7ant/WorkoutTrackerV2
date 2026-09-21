@@ -8,7 +8,10 @@ router = Router(name="start")
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     await message.answer(
-        "/exercises — exercises interaction\n/history — workout sessions history\n/workout — start workout session\n/export — export log as an AI analysis prompt"
+        "/exercises — exercises interaction\n"
+        "/history — workout sessions history\n"
+        "/workout — start workout session\n"
+        "/export — export log as an AI analysis prompt"
     )
 
 

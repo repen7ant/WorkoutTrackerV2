@@ -13,3 +13,34 @@ dependencies = [
     "sqlalchemy>=2.0.49",
     "structlog>=25.5.0",
 ]
+
+[dependency-groups]
+# Версия зафиксирована намеренно: набор правил ruff по умолчанию меняется
+# между релизами, и без пина линт «чинится» до следующего обновления.
+dev = ["ruff==0.16.8"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # bugbear
+    "C4",     # comprehensions
+    "SIM",    # simplify
+    "BLE",    # никаких except Exception
+    "S",      # bandit
+    "ASYNC",  # корректность async — весь проект на нём
+    "RUF",
+]
+ignore = [
+    # Код комментируется по-русски, кириллица в комментариях и докстрингах —
+    # это норма проекта, а не «похожий на латиницу символ».
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+# DTZ не включаем намеренно: даты тренировок локальные — в контейнерах выставлен
+# TZ=Europe/Moscow, а введённую пользователем DD-MM-YY мы сразу приводим к date,
+# таймзоне там взяться неоткуда.

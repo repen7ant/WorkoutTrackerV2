@@ -23,9 +23,9 @@ def format_exercise_list(
 
 def format_exercise_log(
     exercise_name: str,
-    sessions: list[
-        dict
-    ],  # [{"date": date, "notes": str|None, "sets": [{"weight": Decimal|None, "reps": int}]}]
+    # [{"date": date, "notes": str | None,
+    #   "sets": [{"weight": Decimal | None, "reps": int}]}]
+    sessions: list[dict],
 ) -> str:
     if not sessions:
         return f"<b>{exercise_name}</b>\n\nNo history yet."

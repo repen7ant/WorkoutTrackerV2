@@ -28,10 +28,7 @@ def get_structlog_config(log_config: LogConfig) -> dict:
     """
     Формирует конфигурацию для structlog
     """
-    if log_config.show_debug_logs:
-        min_level = logging.DEBUG
-    else:
-        min_level = logging.INFO
+    min_level = logging.DEBUG if log_config.show_debug_logs else logging.INFO
 
     if log_config.allow_third_party_logs:
         # Create handler for stdlib logging
@@ -62,7 +59,7 @@ def get_processors(log_config: LogConfig) -> list:
     """
 
     def custom_json_serializer(data, *args, **kwargs):
-        result = dict()
+        result = {}
         for key in ("level", "event"):
             if key in data:
                 result[key] = data.pop(key)
@@ -79,7 +76,7 @@ def get_processors(log_config: LogConfig) -> list:
             event_dict.pop("_record")
         return event_dict
 
-    processors = list()
+    processors = []
     if log_config.show_datetime is True:
         processors.append(
             structlog.processors.TimeStamper(

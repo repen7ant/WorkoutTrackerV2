@@ -1,8 +1,10 @@
+from contextlib import suppress
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -27,8 +29,11 @@ from bot.utils.formatters import format_exercise_log
 router = Router(name="workout")
 
 
-def parse_set(text: str) -> tuple[Decimal | None, int] | None:
+def parse_set(text: str | None) -> tuple[Decimal | None, int] | None:
     """Парсит '100x5' или 'BWx10'. Возвращает (weight, reps) или None."""
+    # в состоянии ввода подходов может прилететь стикер или фото — там text is None
+    if not text:
+        return None
     try:
         parts = text.strip().upper().split("X")
         if len(parts) != 2:
@@ -43,7 +48,7 @@ def parse_set(text: str) -> tuple[Decimal | None, int] | None:
         if weight < 0:
             return None
         return weight, reps
-    except Exception:
+    except (ValueError, InvalidOperation):
         return None
 
 
@@ -322,12 +327,10 @@ async def enter_notes(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     prompt_msg_id = data.get("notes_prompt_msg_id")
     if prompt_msg_id:
-        try:
+        with suppress(TelegramBadRequest):
             await message.bot.edit_message_reply_markup(
                 chat_id=message.chat.id, message_id=prompt_msg_id, reply_markup=None
             )
-        except Exception:
-            pass
     await message.answer(
         build_confirm_text(data),
         parse_mode="HTML",
@@ -378,10 +381,8 @@ async def save_and_finish(
 # отменить всю тренировку
 @router.callback_query(F.data == "wk_cancel")
 async def cb_cancel(call: CallbackQuery, state: FSMContext) -> None:
-    try:
+    with suppress(TelegramBadRequest):
         await call.message.edit_reply_markup(reply_markup=cancel_confirm_kb())
-    except Exception:
-        pass
     await call.answer()
 
 
@@ -401,10 +402,8 @@ async def cb_cancel_abort(call: CallbackQuery, state: FSMContext) -> None:
         kb = finish_date_kb()
     elif current == WorkoutSession.entering_date:
         await state.set_state(WorkoutSession.finishing)
-        try:
+        with suppress(TelegramBadRequest):
             await call.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
         await call.message.answer("Choose workout date:", reply_markup=finish_date_kb())
         await call.answer()
         return

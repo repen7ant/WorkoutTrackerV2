@@ -143,7 +143,7 @@ class ExerciseRepository:
         rows = result.all()
 
         sessions: dict[int, dict] = {}
-        for workout, we, s in rows:
+        for workout, _we, s in rows:
             if workout.id not in sessions:
                 sessions[workout.id] = {
                     "date": workout.date,

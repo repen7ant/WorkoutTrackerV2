@@ -9,11 +9,11 @@ from bot.models.workouts import Workout
 
 __all__ = [
     "Base",
-    "User",
-    "Muscle",
     "Exercise",
     "ExerciseMuscle",
+    "Muscle",
+    "Set",
+    "User",
     "Workout",
     "WorkoutExercise",
-    "Set",
 ]
