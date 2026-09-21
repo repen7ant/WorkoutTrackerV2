@@ -1,6 +1,6 @@
 from contextlib import suppress
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from aiogram import F, Router
@@ -8,6 +8,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.workout import (
@@ -28,6 +29,13 @@ from bot.utils.formatters import format_exercise_log
 
 router = Router(name="workout")
 
+# Границы берутся из схемы (models/sets.py): вес — Numeric(5, 2), повторения —
+# SmallInteger. Всё, что не влезает, раньше доходило до INSERT и роняло
+# сохранение уже собранной тренировки.
+MAX_WEIGHT = Decimal("999.99")
+WEIGHT_STEP = Decimal("0.01")
+MAX_REPS = 32767
+
 
 def parse_set(text: str | None) -> tuple[Decimal | None, int] | None:
     """Парсит '100x5' или 'BWx10'. Возвращает (weight, reps) или None."""
@@ -40,12 +48,19 @@ def parse_set(text: str | None) -> tuple[Decimal | None, int] | None:
             return None
         weight_str, reps_str = parts
         reps = int(reps_str)
-        if reps <= 0:
+        if not 0 < reps <= MAX_REPS:
             return None
         if weight_str == "BW":
             return None, reps
         weight = Decimal(weight_str)
-        if weight < 0:
+        # NaN и Infinity парсятся молча, а сравнения с NaN всегда ложны —
+        # поэтому конечность проверяем первой
+        if not weight.is_finite() or weight < 0:
+            return None
+        # округляем до масштаба колонки здесь, иначе Postgres округлит сам
+        # и в истории окажется не то число, что бот показал при вводе
+        weight = weight.quantize(WEIGHT_STEP, rounding=ROUND_HALF_UP)
+        if weight > MAX_WEIGHT:
             return None
         return weight, reps
     except (ValueError, InvalidOperation):
@@ -206,7 +221,8 @@ async def enter_set(message: Message, state: FSMContext) -> None:
     parsed = parse_set(message.text)
     if parsed is None:
         await message.answer(
-            "Invalid format. Use <code>100x5</code> or <code>BWx10</code>:",
+            "Invalid set. Use <code>100x5</code> or <code>BWx10</code>"
+            f" (weight up to {MAX_WEIGHT}):",
             parse_mode="HTML",
         )
         return
@@ -397,8 +413,15 @@ async def enter_notes(message: Message, state: FSMContext) -> None:
 async def cb_save(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await remove_kb(call)
-    await save_and_finish(call.message, state, session, db_user)
+    await remove_kb(call)  # снимаем сразу, чтобы двойной тап не сохранил дважды
+    try:
+        await save_and_finish(call.message, state, session, db_user)
+    except SQLAlchemyError:
+        # тренировка цела в FSM, но без кнопок из confirming уже не выйти —
+        # возвращаем их, а сообщить об ошибке дальше должен обработчик ошибок
+        with suppress(TelegramBadRequest):
+            await call.message.edit_reply_markup(reply_markup=confirm_save_kb())
+        raise
     await call.answer()
 
 

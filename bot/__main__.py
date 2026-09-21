@@ -9,6 +9,7 @@ from structlog.typing import FilteringBoundLogger
 from bot.config import Settings
 from bot.db.session import AsyncSessionLocal
 from bot.handlers import get_routers
+from bot.handlers.errors import on_error
 from bot.logging_config import get_structlog_config
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.fsm import EXERCISES_DESTINY, SubFSMMiddleware
@@ -37,6 +38,8 @@ async def main() -> None:
     dp.update.middleware(SubFSMMiddleware(EXERCISES_DESTINY))
 
     dp.include_routers(*get_routers())
+    # только на диспетчере: ошибки роутеров наверх сами не всплывают
+    dp.errors.register(on_error)
 
     await logger.ainfo("Starting polling...")
     try:
