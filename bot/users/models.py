@@ -1,7 +1,7 @@
 from sqlalchemy import BigInteger, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from bot.models.base import Base
+from bot.db.base import Base
 
 
 class User(Base):

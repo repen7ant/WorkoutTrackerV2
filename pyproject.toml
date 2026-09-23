@@ -17,7 +17,13 @@ dependencies = [
 [dependency-groups]
 # Версия зафиксирована намеренно: набор правил ruff по умолчанию меняется
 # между релизами, и без пина линт «чинится» до следующего обновления.
-dev = ["ruff==0.16.8"]
+dev = [
+    "pytest>=9.1.1",
+    "ruff==0.16.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.ruff.lint]
 select = [
@@ -44,3 +50,7 @@ ignore = [
 # DTZ не включаем намеренно: даты тренировок локальные — в контейнерах выставлен
 # TZ=Europe/Moscow, а введённую пользователем DD-MM-YY мы сразу приводим к date,
 # таймзоне там взяться неоткуда.
+
+[tool.ruff.lint.per-file-ignores]
+# assert — основной инструмент pytest
+"tests/*" = ["S101"]

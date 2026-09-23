@@ -1,11 +1,13 @@
-from bot.models.base import Base
-from bot.models.exercise_muscles import ExerciseMuscle
-from bot.models.exercises import Exercise
-from bot.models.muscles import Muscle
-from bot.models.sets import Set
-from bot.models.users import User
-from bot.models.workout_exercises import WorkoutExercise
-from bot.models.workouts import Workout
+"""
+Все модели разом — только для Alembic, которому нужна полная метадата.
+
+Код модулей импортирует модели своего модуля напрямую и чужие таблицы не трогает.
+"""
+
+from bot.catalog.models import Exercise, ExerciseMuscle, Muscle
+from bot.db.base import Base
+from bot.users.models import User
+from bot.workouts.models import Set, Workout, WorkoutExercise
 
 __all__ = [
     "Base",

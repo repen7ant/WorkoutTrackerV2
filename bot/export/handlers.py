@@ -5,10 +5,10 @@ from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.export import ExportPeriod, export_period_kb
-from bot.models.users import User
-from bot.repositories.workout import WorkoutRepository
-from bot.utils.formatters import build_ai_prompt
+from bot.export.keyboards import ExportPeriod, export_period_kb
+from bot.export.prompt import build_ai_prompt
+from bot.export.service import collect_workouts
+from bot.users.models import User
 
 router = Router(name="export")
 
@@ -45,8 +45,7 @@ async def cb_export_period(
     today = date.today()
     since = today - timedelta(days=days) if days is not None else None
 
-    repo = WorkoutRepository(session)
-    workouts = await repo.get_workouts_for_export(db_user.id, since)
+    workouts = await collect_workouts(session, db_user.id, since)
     if not workouts:
         await call.message.edit_text(f"No workouts for {label}.")
         await call.answer()

@@ -4,8 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.filters import ExState
-from bot.keyboards.exercises import (
+from bot.catalog.formatters import format_exercise_list
+from bot.catalog.keyboards import (
     ExerciseDelete,
     ExerciseDeleteConfirm,
     ExerciseFilter,
@@ -16,12 +16,11 @@ from bot.keyboards.exercises import (
     muscles_filter_kb,
     search_result_kb,
 )
-from bot.models.exercises import Exercise as ExerciseModel
-from bot.models.users import User
-from bot.repositories.exercise import ExerciseRepository
-from bot.states.exercises import ExerciseAdd, ExerciseSearch
-from bot.states.workout import WorkoutSession
-from bot.utils.formatters import format_exercise_list
+from bot.catalog.repository import ExerciseRepository
+from bot.catalog.states import ExerciseAdd, ExerciseSearch
+from bot.filters import ExState
+from bot.users.models import User
+from bot.workouts.states import WorkoutSession
 
 router = Router(name="exercises")
 PER_PAGE = 20
@@ -93,7 +92,7 @@ async def search_query(
     if not exercises:
         await message.answer("Nothing found.", reply_markup=search_result_kb())
         return
-    text = format_exercise_list([(ex, ex.muscles) for ex in exercises])
+    text = format_exercise_list(exercises)
     if total > len(exercises):
         text += f"\n\nShowing {len(exercises)} of {total}. Refine the search."
     await message.answer(text, parse_mode="HTML", reply_markup=search_result_kb())
@@ -119,8 +118,7 @@ async def cb_filter(
 ) -> None:
     repo = ExerciseRepository(session)
     exercises = await repo.filter_by_muscle_id(callback_data.muscle_id, db_user.id)
-    result = [(ex, ex.muscles) for ex in exercises]
-    text = format_exercise_list(result) if result else "No exercises found."
+    text = format_exercise_list(exercises)
     await call.message.edit_text(
         text, parse_mode="HTML", reply_markup=exercises_menu_kb(1, 1)
     )
@@ -197,9 +195,16 @@ async def cb_delete_menu(
 
 @router.callback_query(ExerciseDelete.filter())
 async def cb_delete(
-    call: CallbackQuery, callback_data: ExerciseDelete, session: AsyncSession
+    call: CallbackQuery,
+    callback_data: ExerciseDelete,
+    session: AsyncSession,
+    db_user: User,
 ) -> None:
-    exercise = await session.get(ExerciseModel, callback_data.exercise_id)
+    repo = ExerciseRepository(session)
+    exercise = await repo.get_own(callback_data.exercise_id, db_user.id)
+    if exercise is None:
+        await call.answer("Exercise not found or access denied.", show_alert=True)
+        return
     await call.message.edit_text(
         f"Delete <b>{exercise.name}</b>?",
         parse_mode="HTML",

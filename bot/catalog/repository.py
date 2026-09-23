@@ -2,15 +2,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from bot.models.exercise_muscles import ExerciseMuscle
-from bot.models.exercises import Exercise
-from bot.models.muscles import Muscle
-from bot.models.sets import Set
-from bot.models.workout_exercises import WorkoutExercise
-from bot.models.workouts import Workout
+from bot.catalog.models import Exercise, ExerciseMuscle, Muscle
 
 
 class ExerciseRepository:
+    """Таблицы каталога — и только они: тренировки сюда не заглядывают."""
+
     def __init__(self, session: AsyncSession):
         self.session = session
 
@@ -19,29 +16,36 @@ class ExerciseRepository:
     ) -> tuple[list[Exercise], int]:
         """Совпадения и их общее число: по короткому запросу их могут быть сотни,
         а Telegram не покажет ни такую клавиатуру, ни такое сообщение."""
-        base_filter = Exercise.user_id.is_(None) | (Exercise.user_id == user_id)
-        name_filter = Exercise.name.ilike(f"%{query}%")
+        filters = (Exercise.visible_to(user_id), Exercise.name.ilike(f"%{query}%"))
 
         total_result = await self.session.execute(
-            select(func.count(Exercise.id)).where(base_filter, name_filter)
+            select(func.count(Exercise.id)).where(*filters)
         )
         total = total_result.scalar_one()
 
         result = await self.session.execute(
             select(Exercise)
             .options(selectinload(Exercise.muscles))
-            .where(base_filter, name_filter)
+            .where(*filters)
             .order_by(Exercise.name)
             .limit(limit)
         )
         return list(result.scalars().all()), total
 
-    async def get_for_user(self, exercise_id: int, user_id: int) -> Exercise | None:
+    async def get_visible(self, exercise_id: int, user_id: int) -> Exercise | None:
         """Упражнение, доступное этому пользователю: своё или общее."""
         result = await self.session.execute(
             select(Exercise).where(
-                Exercise.id == exercise_id,
-                Exercise.user_id.is_(None) | (Exercise.user_id == user_id),
+                Exercise.id == exercise_id, Exercise.visible_to(user_id)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_own(self, exercise_id: int, user_id: int) -> Exercise | None:
+        """Только личное упражнение: общие удалять нельзя."""
+        result = await self.session.execute(
+            select(Exercise).where(
+                Exercise.id == exercise_id, Exercise.owned_by(user_id)
             )
         )
         return result.scalar_one_or_none()
@@ -51,12 +55,11 @@ class ExerciseRepository:
     ) -> Exercise | None:
         """None, если упражнение с таким названием уже доступно пользователю."""
         existing = await self.session.execute(
-            select(Exercise).where(
-                Exercise.name.ilike(name),
-                Exercise.user_id.is_(None) | (Exercise.user_id == user_id),
+            select(Exercise.id).where(
+                Exercise.name.ilike(name), Exercise.visible_to(user_id)
             )
         )
-        if existing.scalar_one_or_none() is not None:
+        if existing.first() is not None:
             return None
 
         exercise = Exercise(name=name, user_id=user_id)
@@ -66,8 +69,7 @@ class ExerciseRepository:
         for muscle_name in muscle_names:
             result = await self.session.execute(
                 select(Muscle).where(
-                    Muscle.name.ilike(muscle_name),
-                    Muscle.user_id.is_(None) | (Muscle.user_id == user_id),
+                    Muscle.name.ilike(muscle_name), Muscle.visible_to(user_id)
                 )
             )
             muscle = result.scalar_one_or_none()
@@ -82,24 +84,17 @@ class ExerciseRepository:
         return exercise
 
     async def filter_by_muscle_id(self, muscle_id: int, user_id: int) -> list[Exercise]:
-        base_filter = Exercise.user_id.is_(None) | (Exercise.user_id == user_id)
         result = await self.session.execute(
             select(Exercise)
             .options(selectinload(Exercise.muscles))
             .join(ExerciseMuscle)
-            .where(base_filter, ExerciseMuscle.muscle_id == muscle_id)
+            .where(Exercise.visible_to(user_id), ExerciseMuscle.muscle_id == muscle_id)
             .order_by(Exercise.name)
         )
         return list(result.scalars().all())
 
     async def delete(self, exercise_id: int, user_id: int) -> bool:
-        result = await self.session.execute(
-            select(Exercise).where(
-                Exercise.id == exercise_id,
-                Exercise.user_id == user_id,
-            )
-        )
-        exercise = result.scalar_one_or_none()
+        exercise = await self.get_own(exercise_id, user_id)
         if exercise is None:
             return False
         await self.session.delete(exercise)
@@ -109,11 +104,9 @@ class ExerciseRepository:
 
     async def get_page(
         self, page: int, user_id: int, per_page: int = 20
-    ) -> tuple[list[tuple[Exercise, list[Muscle]]], int]:
-        base_filter = Exercise.user_id.is_(None) | (Exercise.user_id == user_id)
-
+    ) -> tuple[list[Exercise], int]:
         total_result = await self.session.execute(
-            select(func.count(Exercise.id)).where(base_filter)
+            select(func.count(Exercise.id)).where(Exercise.visible_to(user_id))
         )
         total = total_result.scalar_one()
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -121,25 +114,22 @@ class ExerciseRepository:
         result = await self.session.execute(
             select(Exercise)
             .options(selectinload(Exercise.muscles))
-            .where(base_filter)
+            .where(Exercise.visible_to(user_id))
             .order_by(Exercise.name)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
-        exercises = result.scalars().all()
-        return [(ex, ex.muscles) for ex in exercises], total_pages
+        return list(result.scalars().all()), total_pages
 
     async def get_user_exercises(self, user_id: int) -> list[Exercise]:
         result = await self.session.execute(
-            select(Exercise).where(Exercise.user_id == user_id).order_by(Exercise.name)
+            select(Exercise).where(Exercise.owned_by(user_id)).order_by(Exercise.name)
         )
         return list(result.scalars().all())
 
     async def get_all_muscles(self, user_id: int) -> list[Muscle]:
         result = await self.session.execute(
-            select(Muscle)
-            .where(Muscle.user_id.is_(None) | (Muscle.user_id == user_id))
-            .order_by(Muscle.name)
+            select(Muscle).where(Muscle.visible_to(user_id)).order_by(Muscle.name)
         )
         return list(result.scalars().all())
 
@@ -150,49 +140,3 @@ class ExerciseRepository:
         orphans = result.scalars().all()
         for muscle in orphans:
             await self.session.delete(muscle)
-
-    async def get_exercise_log(
-        self, exercise_id: int, user_id: int, limit: int = 10
-    ) -> list[dict]:
-        recent_workouts = (
-            select(Workout.id)
-            .where(
-                Workout.user_id == user_id,
-                Workout.id.in_(
-                    select(WorkoutExercise.workout_id).where(
-                        WorkoutExercise.exercise_id == exercise_id
-                    )
-                ),
-            )
-            .order_by(Workout.date.desc(), Workout.id.desc())
-            .limit(limit)
-        )
-
-        result = await self.session.execute(
-            select(Workout, WorkoutExercise, Set)
-            .join(WorkoutExercise, WorkoutExercise.workout_id == Workout.id)
-            .join(Set, Set.workout_exercise_id == WorkoutExercise.id)
-            .where(
-                WorkoutExercise.exercise_id == exercise_id,
-                Workout.id.in_(recent_workouts),
-            )
-            .order_by(Workout.date.asc(), Workout.id.asc(), Set.id.asc())
-        )
-        rows = result.all()
-
-        sessions: dict[int, dict] = {}
-        for workout, _we, s in rows:
-            if workout.id not in sessions:
-                sessions[workout.id] = {
-                    "date": workout.date,
-                    "notes": workout.notes,
-                    "sets": [],
-                }
-            sessions[workout.id]["sets"].append(
-                {
-                    "weight": s.weight,
-                    "reps": s.reps,
-                }
-            )
-
-        return list(sessions.values())
