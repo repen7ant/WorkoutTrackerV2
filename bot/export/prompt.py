@@ -1,62 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from bot.models.exercises import Exercise
-from bot.models.muscles import Muscle
-from bot.models.workouts import Workout
-
-
-def format_exercise_list(
-    exercises: list[tuple[Exercise, list[Muscle]]], offset: int = 0
-) -> str:
-    if not exercises:
-        return "No exercises found."
-
-    lines = ["<b>Exercises:</b>\n"]
-    for i, (exercise, muscles) in enumerate(exercises, start=1 + offset):
-        muscle_str = " · ".join(m.name for m in muscles) if muscles else "—"
-        lines.append(f"{i}. {exercise.name}")
-        lines.append(f"   {muscle_str}\n")
-
-    return "\n".join(lines)
-
-
-def format_exercise_log(
-    exercise_name: str,
-    # [{"date": date, "notes": str | None,
-    #   "sets": [{"weight": Decimal | None, "reps": int}]}]
-    sessions: list[dict],
-) -> str:
-    if not sessions:
-        return f"<b>{exercise_name}</b>\n\nNo history yet."
-
-    lines = [f"<b>{exercise_name}</b>\n"]
-    for session in sessions:
-        date_str = session["date"].strftime("%d-%m-%y")
-        lines.append(f"<b>{date_str}</b>")
-        if session["notes"]:
-            lines.append(f"<i>{session['notes']}</i>")
-        for i, s in enumerate(session["sets"], start=1):
-            weight = "BW" if s["weight"] is None else f"{s['weight']}kg"
-            lines.append(f"  {i}. {weight} x {s['reps']}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def format_workout_detail(workout: Workout, exercises: list[dict]) -> str:
-    date_str = workout.date.strftime("%d-%m-%y")
-    lines = [f"<b>{date_str}</b>"]
-    if workout.notes:
-        lines.append(f"<i>{workout.notes}</i>")
-    lines.append("")
-    for ex in exercises:
-        lines.append(f"<b>{ex['exercise_name']}</b>")
-        for i, s in enumerate(ex["sets"], start=1):
-            weight = "BW" if s["weight"] is None else f"{s['weight']}kg"
-            lines.append(f"  {i}. {weight} x {s['reps']}")
-        lines.append("")
-    return "\n".join(lines)
+from bot.export.service import ExportWorkout
 
 
 def _format_weight_compact(weight: Decimal | None) -> str:
@@ -105,7 +50,7 @@ dates, weights and rep counts instead of giving generic advice.
 
 
 def build_ai_prompt(
-    workouts: list[dict],  # результат WorkoutRepository.get_workouts_for_export
+    workouts: list[ExportWorkout],
     period_label: str,
     date_from: date | None,
     date_to: date,

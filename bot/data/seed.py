@@ -4,10 +4,8 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from bot.catalog.models import Exercise, ExerciseMuscle, Muscle
 from bot.db.session import AsyncSessionLocal
-from bot.models.exercise_muscles import ExerciseMuscle
-from bot.models.exercises import Exercise
-from bot.models.muscles import Muscle
 
 CSV_PATH = Path(__file__).parent / "Exercises.csv"
 
