@@ -1,8 +1,8 @@
 """
 Всё, что каталог отдаёт другим модулям.
 
-Тренировки, история и экспорт узнают названия и мышцы упражнений только
-отсюда, а не из таблиц каталога
+Тренировки и экспорт узнают про упражнения только отсюда, а не из таблиц
+каталога
 """
 
 from dataclasses import dataclass
@@ -18,7 +18,6 @@ from bot.catalog.repository import ExerciseRepository
 class ExerciseInfo:
     id: int
     name: str
-    muscles: tuple[str, ...] = ()
 
 
 class Catalog:
@@ -38,48 +37,39 @@ class Catalog:
         ex = await ExerciseRepository(self.session).get_visible(exercise_id, user_id)
         return ExerciseInfo(id=ex.id, name=ex.name) if ex else None
 
-    async def visible_ids(self, exercise_ids: set[int], user_id: int) -> set[int]:
+    async def get_visible_many(
+        self, exercise_ids: set[int], user_id: int
+    ) -> dict[int, ExerciseInfo]:
         """Те из exercise_ids, что доступны пользователю."""
         if not exercise_ids:
-            return set()
+            return {}
         result = await self.session.execute(
-            select(Exercise.id).where(
+            select(Exercise.id, Exercise.name).where(
                 Exercise.id.in_(exercise_ids), Exercise.visible_to(user_id)
             )
         )
-        return set(result.scalars().all())
+        return {
+            ex_id: ExerciseInfo(id=ex_id, name=name)
+            for ex_id, name in result.tuples().all()
+        }
 
-    async def describe(
-        self, exercise_ids: set[int], with_muscles: bool = False
-    ) -> dict[int, ExerciseInfo]:
+    async def muscles(self, exercise_ids: set[int]) -> dict[int, list[str]]:
         """
-        Названия (и, если нужно, мышцы по алфавиту) уже записанных упражнений.
+        Мышцы упражнений по алфавиту.
 
         Доступ здесь не проверяется: ids приходят из тренировок самого
-        пользователя, а упражнение, однажды попавшее в тренировку, остаётся
-        частью его истории.
+        пользователя. Удалённых упражнений в ответе нет — их мышцы удалены
+        вместе с ними.
         """
         if not exercise_ids:
             return {}
         result = await self.session.execute(
-            select(Exercise.id, Exercise.name).where(Exercise.id.in_(exercise_ids))
+            select(ExerciseMuscle.exercise_id, Muscle.name)
+            .join(Muscle, Muscle.id == ExerciseMuscle.muscle_id)
+            .where(ExerciseMuscle.exercise_id.in_(exercise_ids))
+            .order_by(Muscle.name)
         )
-        names = dict(result.tuples().all())
-
         muscles: dict[int, list[str]] = {}
-        if with_muscles:
-            result = await self.session.execute(
-                select(ExerciseMuscle.exercise_id, Muscle.name)
-                .join(Muscle, Muscle.id == ExerciseMuscle.muscle_id)
-                .where(ExerciseMuscle.exercise_id.in_(exercise_ids))
-                .order_by(Muscle.name)
-            )
-            for exercise_id, name in result.tuples().all():
-                muscles.setdefault(exercise_id, []).append(name)
-
-        return {
-            ex_id: ExerciseInfo(
-                id=ex_id, name=name, muscles=tuple(muscles.get(ex_id, ()))
-            )
-            for ex_id, name in names.items()
-        }
+        for exercise_id, name in result.tuples().all():
+            muscles.setdefault(exercise_id, []).append(name)
+        return muscles

@@ -3,7 +3,6 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.catalog.api import Catalog
 from bot.history.formatters import format_workout_detail
 from bot.history.keyboards import (
     HistoryDetail,
@@ -71,10 +70,7 @@ async def cb_history_detail(
     if workout is None:
         await call.answer("Workout not found.", show_alert=True)
         return
-    exercises = await Catalog(session).describe(
-        {ex.exercise_id for ex in workout.exercises}
-    )
-    text = format_workout_detail(workout, exercises)
+    text = format_workout_detail(workout)
     await call.message.edit_text(
         text,
         parse_mode="HTML",

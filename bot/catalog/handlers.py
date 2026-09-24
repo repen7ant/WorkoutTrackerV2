@@ -206,7 +206,7 @@ async def cb_delete(
         await call.answer("Exercise not found or access denied.", show_alert=True)
         return
     await call.message.edit_text(
-        f"Delete <b>{exercise.name}</b>?",
+        f"Delete <b>{exercise.name}</b>?\nWorkouts you've already logged will keep it.",
         parse_mode="HTML",
         reply_markup=delete_confirm_kb(callback_data.exercise_id),
     )

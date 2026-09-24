@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Numeric, SmallInteger, Text
+from sqlalchemy import Date, ForeignKey, Numeric, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -22,13 +22,20 @@ class Workout(Base):
 class WorkoutExercise(Base):
     """
     Упражнение в рамках конкретной тренировки
+
+    Название копируется сюда при сохранении: упражнение могут удалить из
+    каталога, а тренировка должна остаться такой, какой была. Тогда
+    exercise_id становится NULL, а exercise_name остаётся.
     """
 
     __tablename__ = "workout_exercises"
     id: Mapped[int] = mapped_column(primary_key=True)
     position: Mapped[int] = mapped_column(SmallInteger)
     workout_id: Mapped[int] = mapped_column(ForeignKey("workouts.id"))
-    exercise_id: Mapped[int] = mapped_column(ForeignKey("exercises.id"))
+    exercise_id: Mapped[int | None] = mapped_column(
+        ForeignKey("exercises.id", ondelete="SET NULL")
+    )
+    exercise_name: Mapped[str] = mapped_column(String(128))
 
 
 class Set(Base):

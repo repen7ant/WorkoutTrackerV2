@@ -18,10 +18,12 @@ async def record_workout(session: AsyncSession, record: WorkoutRecord) -> int:
     не делать вовсе.
     """
     exercise_ids = {entry.exercise_id for entry in record.exercises}
-    available = await Catalog(session).visible_ids(exercise_ids, record.user_id)
-    if missing := exercise_ids - available:
+    available = await Catalog(session).get_visible_many(exercise_ids, record.user_id)
+    if missing := exercise_ids - available.keys():
         raise ExerciseNotAvailable(f"exercises not available: {sorted(missing)}")
 
-    workout_id = await WorkoutRepository(session).add(record)
+    # название берём из каталога, а не из черновика: это источник правды
+    names = {ex_id: info.name for ex_id, info in available.items()}
+    workout_id = await WorkoutRepository(session).add(record, names)
     await session.commit()
     return workout_id

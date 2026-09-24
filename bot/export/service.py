@@ -36,8 +36,13 @@ async def collect_workouts(
     if not workouts:
         return []
 
-    exercise_ids = {ex.exercise_id for w in workouts for ex in w.exercises}
-    info = await Catalog(session).describe(exercise_ids, with_muscles=True)
+    exercise_ids = {
+        ex.exercise_id
+        for w in workouts
+        for ex in w.exercises
+        if ex.exercise_id is not None
+    }
+    muscles = await Catalog(session).muscles(exercise_ids)
 
     return [
         ExportWorkout(
@@ -45,8 +50,9 @@ async def collect_workouts(
             notes=w.notes,
             exercises=[
                 ExportExercise(
-                    name=info[ex.exercise_id].name,
-                    muscles=list(info[ex.exercise_id].muscles),
+                    name=ex.name,
+                    # у удалённого упражнения мышц уже нет
+                    muscles=muscles.get(ex.exercise_id, []),
                     sets=[ExportSet(weight=s.weight, reps=s.reps) for s in ex.sets],
                 )
                 for ex in w.exercises

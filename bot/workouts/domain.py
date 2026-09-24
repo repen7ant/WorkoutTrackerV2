@@ -97,7 +97,8 @@ class WorkoutRecord:
 
 @dataclass(frozen=True)
 class LoggedExercise:
-    exercise_id: int
+    exercise_id: int | None  # None — упражнение удалено из каталога
+    name: str  # название на момент тренировки
     sets: list[SetEntry]
 
 

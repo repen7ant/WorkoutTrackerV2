@@ -24,7 +24,9 @@ class WorkoutRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def add(self, record: WorkoutRecord) -> int:
+    async def add(self, record: WorkoutRecord, names: dict[int, str]) -> int:
+        """names — названия упражнений по id: они сохраняются вместе с
+        тренировкой и переживают удаление упражнения из каталога."""
         workout = Workout(user_id=record.user_id, date=record.date, notes=record.notes)
         self.session.add(workout)
         await self.session.flush()
@@ -33,6 +35,7 @@ class WorkoutRepository:
             we = WorkoutExercise(
                 workout_id=workout.id,
                 exercise_id=entry.exercise_id,
+                exercise_name=names[entry.exercise_id],
                 position=position,
             )
             self.session.add(we)
@@ -129,7 +132,9 @@ class WorkoutRepository:
                     id=workout.id, date=workout.date, notes=workout.notes, exercises=[]
                 )
             if we.id not in entries:
-                entries[we.id] = LoggedExercise(exercise_id=we.exercise_id, sets=[])
+                entries[we.id] = LoggedExercise(
+                    exercise_id=we.exercise_id, name=we.exercise_name, sets=[]
+                )
                 workouts[workout.id].exercises.append(entries[we.id])
             entries[we.id].sets.append(SetEntry(weight=s.weight, reps=s.reps))
         return list(workouts.values())
