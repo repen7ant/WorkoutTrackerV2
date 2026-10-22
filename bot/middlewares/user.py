@@ -3,9 +3,8 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.users.models import User as UserModel
+from bot.users.service import get_or_register
 
 
 class UserMiddleware(BaseMiddleware):
@@ -19,21 +18,5 @@ class UserMiddleware(BaseMiddleware):
         if user is None:
             return await handler(event, data)
 
-        session: AsyncSession = data["session"]
-        db_user = await session.get(UserModel, user.id)
-
-        if db_user is None:
-            db_user = UserModel(
-                username=user.username,
-                id=user.id,
-            )
-            session.add(db_user)
-            await session.commit()
-        elif db_user.username != user.username:
-            # username в Telegram меняется, а в БД оставался тем, что был при
-            # первой встрече
-            db_user.username = user.username
-            await session.commit()
-
-        data["db_user"] = db_user
+        data["db_user"] = await get_or_register(data["session"], user.id, user.username)
         return await handler(event, data)

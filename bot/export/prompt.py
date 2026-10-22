@@ -107,8 +107,7 @@ def build_ai_prompt(
         lines.append(header)
         for ex in workout["exercises"]:
             sets_str = ", ".join(
-                f"{_format_weight_compact(s['weight'])}"
-                f"x{format_amount(s['reps'], s['seconds'])}"
+                f"{_format_weight_compact(s.weight)}x{format_amount(s)}"
                 for s in ex["sets"]
             )
             lines.append(f"  {ex['name']}: {sets_str}")

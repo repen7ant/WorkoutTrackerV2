@@ -17,6 +17,7 @@ from bot.catalog.keyboards import (
     search_result_kb,
 )
 from bot.catalog.repository import ExerciseRepository
+from bot.catalog.service import add_exercise, delete_exercise
 from bot.catalog.states import ExerciseAdd, ExerciseSearch
 from bot.filters import ExState
 from bot.users.models import User
@@ -155,14 +156,13 @@ async def add_muscles(
     message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     data = await ex_state.get_data()
-    repo = ExerciseRepository(session)
     muscle_names = (
         []
         if message.text.strip() == "—"
         else [m.strip() for m in message.text.split(",")]
     )
-    exercise = await repo.add(
-        name=data["name"], user_id=db_user.id, muscle_names=muscle_names
+    exercise = await add_exercise(
+        session, name=data["name"], user_id=db_user.id, muscle_names=muscle_names
     )
     await ex_state.clear()
     if exercise is None:
@@ -220,8 +220,7 @@ async def cb_delete_confirm(
     session: AsyncSession,
     db_user: User,
 ) -> None:
-    repo = ExerciseRepository(session)
-    deleted = await repo.delete(callback_data.exercise_id, db_user.id)
+    deleted = await delete_exercise(session, callback_data.exercise_id, db_user.id)
     if deleted:
         await call.message.edit_text("Exercise deleted.")
     else:

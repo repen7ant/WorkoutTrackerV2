@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from bot.common.formatting import format_set_lines
 from bot.export.prompt import build_ai_prompt
-from bot.export.service import ExportExercise, ExportSet, ExportWorkout
+from bot.export.service import ExportExercise, ExportWorkout
 from bot.workouts.domain import SetEntry
 
 
@@ -24,8 +24,8 @@ def test_export_shows_timed_sets():
                 name="Farmer's Walk",
                 muscles=[],
                 sets=[
-                    ExportSet(weight=Decimal("32.00"), reps=None, seconds=45),
-                    ExportSet(weight=Decimal("32.00"), reps=None, seconds=75),
+                    SetEntry.create(Decimal("32"), seconds=45),
+                    SetEntry.create(Decimal("32"), seconds=75),
                 ],
             )
         ],

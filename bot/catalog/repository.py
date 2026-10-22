@@ -80,7 +80,7 @@ class ExerciseRepository:
             link = ExerciseMuscle(exercise_id=exercise.id, muscle_id=muscle.id)
             self.session.add(link)
 
-        await self.session.commit()
+        await self.session.flush()
         return exercise
 
     async def filter_by_muscle_id(self, muscle_id: int, user_id: int) -> list[Exercise]:
@@ -99,7 +99,7 @@ class ExerciseRepository:
             return False
         await self.session.delete(exercise)
         await self.cleanup_orphan_muscles()
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def get_page(

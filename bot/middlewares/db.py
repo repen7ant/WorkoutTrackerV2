@@ -16,6 +16,8 @@ class DbSessionMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # Коммитят только сервисы: репозитории делают flush, чтобы несколько
+        # записей можно было собрать в одну транзакцию.
         async with self.session_maker() as session:
             data["session"] = session
             return await handler(event, data)

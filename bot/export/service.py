@@ -1,23 +1,17 @@
 from datetime import date
-from decimal import Decimal
 from typing import TypedDict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import Catalog
+from bot.workouts.domain import SetEntry
 from bot.workouts.repository import WorkoutRepository
-
-
-class ExportSet(TypedDict):
-    weight: Decimal | None
-    reps: int | None
-    seconds: int | None
 
 
 class ExportExercise(TypedDict):
     name: str
     muscles: list[str]
-    sets: list[ExportSet]
+    sets: list[SetEntry]
 
 
 class ExportWorkout(TypedDict):
@@ -54,10 +48,7 @@ async def collect_workouts(
                     name=ex.name,
                     # у удалённого упражнения мышц уже нет
                     muscles=muscles.get(ex.exercise_id, []),
-                    sets=[
-                        ExportSet(weight=s.weight, reps=s.reps, seconds=s.seconds)
-                        for s in ex.sets
-                    ],
+                    sets=ex.sets,
                 )
                 for ex in w.exercises
             ],
