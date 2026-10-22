@@ -41,7 +41,12 @@ class WorkoutRepository:
             self.session.add(we)
             await self.session.flush()
             self.session.add_all(
-                Set(workout_exercise_id=we.id, reps=s.reps, weight=s.weight)
+                Set(
+                    workout_exercise_id=we.id,
+                    reps=s.reps,
+                    seconds=s.seconds,
+                    weight=s.weight,
+                )
                 for s in entry.sets
             )
 
@@ -136,5 +141,7 @@ class WorkoutRepository:
                     exercise_id=we.exercise_id, name=we.exercise_name, sets=[]
                 )
                 workouts[workout.id].exercises.append(entries[we.id])
-            entries[we.id].sets.append(SetEntry(weight=s.weight, reps=s.reps))
+            entries[we.id].sets.append(
+                SetEntry(weight=s.weight, reps=s.reps, seconds=s.seconds)
+            )
         return list(workouts.values())

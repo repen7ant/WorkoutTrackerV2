@@ -1,3 +1,4 @@
+import re
 from contextlib import suppress
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -25,20 +26,35 @@ from bot.workouts.states import WorkoutSession
 
 router = Router(name="workout_recording")
 
+# после upper(): «1:30» — минуты:секунды, «45S» — секунды
+_MIN_SEC = re.compile(r"(\d+):([0-5]\d)")
+_SEC = re.compile(r"(\d+)S")
+
+
+def _parse_seconds(text: str) -> int | None:
+    if m := _MIN_SEC.fullmatch(text):
+        return int(m[1]) * 60 + int(m[2])
+    if m := _SEC.fullmatch(text):
+        return int(m[1])
+    return None
+
 
 def parse_set(text: str | None) -> SetEntry | None:
-    """Разбирает '100x5' или 'BWx10'. Допустимость значений решает SetEntry."""
+    """Разбирает '100x5', 'BWx10' или время: 'BWx1:30', '20x45s'.
+    Допустимость значений решает SetEntry."""
     # в состоянии ввода подходов может прилететь стикер или фото — там text is None
     if not text:
         return None
     parts = text.strip().upper().split("X")
     if len(parts) != 2:
         return None
-    weight_str, reps_str = parts
+    weight_str, amount_str = parts
     try:
-        reps = int(reps_str)
         weight = None if weight_str == "BW" else Decimal(weight_str)
-        return SetEntry.create(weight, reps)
+        seconds = _parse_seconds(amount_str)
+        if seconds is not None:
+            return SetEntry.create(weight, seconds=seconds)
+        return SetEntry.create(weight, reps=int(amount_str))
     except (ValueError, InvalidOperation):
         # InvalidWorkout — тоже ValueError
         return None
@@ -106,7 +122,8 @@ async def cb_exercise_chosen(
         format_exercise_log(exercise.name, log), parse_mode="HTML"
     )
     sent = await call.message.answer(
-        "Enter set (e.g. <code>100x5</code> or <code>BWx10</code>):",
+        "Enter set (e.g. <code>100x5</code>, <code>BWx10</code>"
+        " or time <code>BWx1:30</code>):",
         parse_mode="HTML",
         reply_markup=set_entered_kb(),
     )
@@ -170,7 +187,8 @@ async def enter_set(message: Message, state: FSMContext) -> None:
     entry = parse_set(message.text)
     if entry is None:
         await message.answer(
-            "Invalid set. Use <code>100x5</code> or <code>BWx10</code>"
+            "Invalid set. Use <code>100x5</code>, <code>BWx10</code>"
+            " or time <code>BWx1:30</code> / <code>BWx90s</code>"
             f" (weight up to {MAX_WEIGHT}):",
             parse_mode="HTML",
         )

@@ -3,14 +3,16 @@ from decimal import Decimal
 
 import pytest
 
+from bot.utils import fsm_json
 from bot.workouts.domain import (
     MAX_REPS,
+    MAX_SECONDS,
     ExerciseEntry,
     InvalidWorkout,
     SetEntry,
     WorkoutRecord,
 )
-from bot.workouts.draft import build_record
+from bot.workouts.draft import build_record, set_to_fsm, sets_from_fsm
 from bot.workouts.handlers.recording import parse_set
 
 
@@ -32,6 +34,24 @@ def test_set_out_of_bounds(weight, reps):
 
 def test_set_weight_rounded_to_column_scale():
     assert SetEntry.create(Decimal("60.555"), 8).weight == Decimal("60.56")
+
+
+def test_timed_set_keeps_seconds_instead_of_reps():
+    assert SetEntry.create(Decimal("20"), seconds=90) == SetEntry(
+        Decimal("20.00"), reps=None, seconds=90
+    )
+
+
+@pytest.mark.parametrize(("reps", "seconds"), [(None, None), (5, 60)])
+def test_set_needs_either_reps_or_seconds(reps, seconds):
+    with pytest.raises(InvalidWorkout):
+        SetEntry.create(None, reps=reps, seconds=seconds)
+
+
+@pytest.mark.parametrize("seconds", [0, MAX_SECONDS + 1])
+def test_timed_set_out_of_bounds(seconds):
+    with pytest.raises(InvalidWorkout):
+        SetEntry.create(None, seconds=seconds)
 
 
 def test_exercise_needs_sets():
@@ -67,6 +87,11 @@ def test_positions_follow_exercise_order():
         ("nanx5", None),
         ("100x0", None),
         (None, None),
+        ("BWx1:30", SetEntry(None, seconds=90)),
+        ("32x45s", SetEntry(Decimal("32.00"), seconds=45)),
+        ("bwx0:05", SetEntry(None, seconds=5)),
+        ("BWx1:60", None),
+        ("BWx0:00", None),
     ],
 )
 def test_parse_set(text, expected):
@@ -87,3 +112,24 @@ def test_build_record_revalidates_fsm_data():
     }
     with pytest.raises(InvalidWorkout):
         build_record(1, data)
+
+
+def _draft(sets: list[dict]) -> dict:
+    return {
+        "workout_date": "2026-01-01",
+        "exercises": [{"exercise_id": 1, "exercise_name": "X", "sets": sets}],
+    }
+
+
+def test_timed_set_survives_fsm_draft():
+    entry = SetEntry.create(None, seconds=90)
+    sets = fsm_json.loads(fsm_json.dumps([set_to_fsm(entry)]))
+    assert sets_from_fsm(sets) == [entry]
+    assert build_record(1, _draft(sets)).exercises[0].sets == (entry,)
+
+
+def test_drafts_started_before_timed_sets_still_load():
+    """В подходах черновиков, начатых до обновления, нет ключа seconds."""
+    sets = [{"weight": None, "reps": 10}]
+    assert sets_from_fsm(sets) == [SetEntry(None, 10)]
+    assert build_record(1, _draft(sets)).exercises[0].sets == (SetEntry(None, 10),)

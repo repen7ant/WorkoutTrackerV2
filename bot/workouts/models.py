@@ -1,7 +1,15 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Numeric, SmallInteger, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -40,11 +48,17 @@ class WorkoutExercise(Base):
 
 class Set(Base):
     """
-    Вес и количество повторений
+    Вес и количество повторений — или время, если подход на время
     """
 
     __tablename__ = "sets"
+    __table_args__ = (
+        CheckConstraint(
+            "(reps IS NULL) <> (seconds IS NULL)", name="sets_reps_or_seconds_check"
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     workout_exercise_id: Mapped[int] = mapped_column(ForeignKey("workout_exercises.id"))
-    reps: Mapped[int] = mapped_column(SmallInteger)
+    reps: Mapped[int | None] = mapped_column(SmallInteger)
+    seconds: Mapped[int | None] = mapped_column(SmallInteger)
     weight: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))

@@ -131,7 +131,8 @@ https://docs.docker.com/compose/gettingstarted#step-3-fix-the-startup-race-with-
 
 - id SERIAL PK
 - workout_exercise_id INT FK → workout_exercises.id
-- reps SMALLINT -- количество повторений
+- reps SMALLINT nullable -- количество повторений
+- seconds SMALLINT nullable -- время подхода (планка, farmer's walk); заполнено ровно одно из reps / seconds
 - weight NUMERIC(5,2) nullable -- NULL = bodyweight
 
 # Функции бота
@@ -163,7 +164,7 @@ https://docs.docker.com/compose/gettingstarted#step-3-fix-the-startup-race-with-
 
 1. Пользователь вводит название — при частичном вводе выводятся совпадения.
 2. После выбора упражнения выводится лог предыдущих результатов (подходы этого упражнения с 10 последних тренировок, где оно встречалось)
-3. Бот ждёт ввода подходов в формате `100x5` (вес × повторения) или `BWx10` (bodyweight). При неправильном вводе, пользователю напоминают правильный способ ввода.
+3. Бот ждёт ввода подходов в формате `100x5` (вес × повторения) или `BWx10` (bodyweight). Подход на время — `BWx1:30` или `20x45s` (мин:сек или секунды). При неправильном вводе, пользователю напоминают правильный способ ввода.
 4. После каждого подхода появляется кнопка `Finish exercise` — можно продолжить ввод или завершить.
 5. После завершения упражнения снова появляются кнопки `Add exercise` и `Finish session`.
 

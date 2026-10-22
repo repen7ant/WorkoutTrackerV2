@@ -10,12 +10,13 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-# Границы берутся из схемы (models.Set): вес — Numeric(5, 2), повторения —
-# SmallInteger. Всё, что не влезает, раньше доходило до INSERT и роняло
-# сохранение уже собранной тренировки.
+# Границы берутся из схемы (models.Set): вес — Numeric(5, 2), повторения и
+# секунды — SmallInteger. Всё, что не влезает, раньше доходило до INSERT и
+# роняло сохранение уже собранной тренировки.
 MAX_WEIGHT = Decimal("999.99")
 WEIGHT_STEP = Decimal("0.01")
 MAX_REPS = 32767
+MAX_SECONDS = 32767
 
 
 class InvalidWorkout(ValueError):
@@ -25,12 +26,22 @@ class InvalidWorkout(ValueError):
 @dataclass(frozen=True)
 class SetEntry:
     weight: Decimal | None  # None — с собственным весом
-    reps: int
+    reps: int | None = None
+    seconds: int | None = None  # подход на время — вместо повторений
 
     @classmethod
-    def create(cls, weight: Decimal | None, reps: int) -> "SetEntry":
-        if not 0 < reps <= MAX_REPS:
+    def create(
+        cls,
+        weight: Decimal | None,
+        reps: int | None = None,
+        seconds: int | None = None,
+    ) -> "SetEntry":
+        if (reps is None) == (seconds is None):
+            raise InvalidWorkout("set must have either reps or seconds")
+        if reps is not None and not 0 < reps <= MAX_REPS:
             raise InvalidWorkout(f"reps must be 1..{MAX_REPS}")
+        if seconds is not None and not 0 < seconds <= MAX_SECONDS:
+            raise InvalidWorkout(f"seconds must be 1..{MAX_SECONDS}")
         if weight is not None:
             # NaN и Infinity парсятся молча, а сравнения с NaN всегда ложны —
             # поэтому конечность проверяем первой
@@ -41,7 +52,7 @@ class SetEntry:
             weight = weight.quantize(WEIGHT_STEP, rounding=ROUND_HALF_UP)
             if weight > MAX_WEIGHT:
                 raise InvalidWorkout(f"weight must be at most {MAX_WEIGHT}")
-        return cls(weight=weight, reps=reps)
+        return cls(weight=weight, reps=reps, seconds=seconds)
 
 
 @dataclass(frozen=True)

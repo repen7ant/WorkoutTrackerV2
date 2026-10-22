@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from bot.common.formatting import format_amount
 from bot.export.service import ExportWorkout
 
 
@@ -84,6 +85,9 @@ def build_ai_prompt(
         "  means weight in kilograms x repetitions, sets listed in the order they",
         "  were performed.",
         "- `BW` in place of a weight means bodyweight only, no external load.",
+        "- A time in place of reps (`BWx1:30`, minutes:seconds) marks a timed set:",
+        "  the load was held or carried that long. Leave timed sets out of tonnage",
+        "  and compare them by time and weight.",
         "- Exercises are listed in the order they were performed. The muscle groups",
         "  each one trains are listed in the EXERCISES section below.",
         "- Workouts are ordered oldest first, newest last.",
@@ -103,7 +107,9 @@ def build_ai_prompt(
         lines.append(header)
         for ex in workout["exercises"]:
             sets_str = ", ".join(
-                f"{_format_weight_compact(s['weight'])}x{s['reps']}" for s in ex["sets"]
+                f"{_format_weight_compact(s['weight'])}"
+                f"x{format_amount(s['reps'], s['seconds'])}"
+                for s in ex["sets"]
             )
             lines.append(f"  {ex['name']}: {sets_str}")
         lines.append("")

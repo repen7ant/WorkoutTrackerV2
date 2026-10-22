@@ -10,7 +10,8 @@ from bot.workouts.repository import WorkoutRepository
 
 class ExportSet(TypedDict):
     weight: Decimal | None
-    reps: int
+    reps: int | None
+    seconds: int | None
 
 
 class ExportExercise(TypedDict):
@@ -53,7 +54,10 @@ async def collect_workouts(
                     name=ex.name,
                     # у удалённого упражнения мышц уже нет
                     muscles=muscles.get(ex.exercise_id, []),
-                    sets=[ExportSet(weight=s.weight, reps=s.reps) for s in ex.sets],
+                    sets=[
+                        ExportSet(weight=s.weight, reps=s.reps, seconds=s.seconds)
+                        for s in ex.sets
+                    ],
                 )
                 for ex in w.exercises
             ],
