@@ -52,6 +52,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
             cd ~/workout-tracker
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.SERVER_USER }} --password-stdin
             docker compose -f docker-compose.prod.yaml pull
