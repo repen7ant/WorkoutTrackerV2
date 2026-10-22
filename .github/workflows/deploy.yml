@@ -5,9 +5,33 @@ on:
     branches: [master]
 
 jobs:
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-24.04-arm #ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest -q
+
   build-and-push:
     name: Build & Push to GHCR
     runs-on: ubuntu-24.04-arm #ubuntu-latest
+    needs: test
     permissions:
       contents: read
       packages: write
