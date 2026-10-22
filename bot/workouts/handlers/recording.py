@@ -123,7 +123,7 @@ async def cb_exercise_chosen(
     )
     sent = await call.message.answer(
         "Enter set (e.g. <code>100x5</code>, <code>BWx10</code>"
-        " or time <code>BWx1:30</code>):",
+        " or time <code>BWx1:30</code> / <code>BWx90s</code>):",
         parse_mode="HTML",
         reply_markup=set_entered_kb(),
     )
