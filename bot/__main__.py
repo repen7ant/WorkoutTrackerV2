@@ -10,6 +10,7 @@ from bot.config import Settings
 from bot.db.session import AsyncSessionLocal
 from bot.handlers import get_routers
 from bot.handlers.errors import on_error
+from bot.history.menu import setup_menu_button
 from bot.logging_config import get_structlog_config
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.fsm import EXERCISES_DESTINY, SubFSMMiddleware
@@ -45,6 +46,7 @@ async def main() -> None:
     # только на диспетчере: ошибки роутеров наверх сами не всплывают
     dp.errors.register(on_error)
 
+    await setup_menu_button(bot, settings.history)
     await logger.ainfo("Starting polling...")
     try:
         await dp.start_polling(bot)

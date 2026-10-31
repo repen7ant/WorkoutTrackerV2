@@ -16,7 +16,8 @@ url = "redis://redis:6379/0"
 mode = "chat"
 # адрес Mini App (только HTTPS); без него /history всегда текстовый
 # webapp_url = "https://history.example.com"
-# получают кнопку Mini App и в режиме chat
+# получают кнопку Mini App и в режиме chat; кнопка меню чата ставится им при
+# старте бота и после удаления id из списка остаётся до смены mode
 beta_user_ids = []
 
 [logs]
