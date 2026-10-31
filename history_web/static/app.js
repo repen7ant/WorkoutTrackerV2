@@ -9,18 +9,26 @@ const tabs = {
   workouts: document.getElementById("tab-workouts"),
   progress: document.getElementById("tab-progress"),
 };
-const UNITS = { weight: "kg", reps: "reps", seconds: "sec" };
 
 let listView = null;
 let listScroll = 0;
 let chart = null;
 let selectedExercise = null;
+const PERIODS = [["1M", 1], ["3M", 3], ["6M", 6], ["1Y", 12], ["All", null]];
+let selectedPeriod = "3M";
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   Object.assign(node, props);
   node.append(...children);
   return node;
+}
+
+function show(...nodes) {
+  view.replaceChildren(...nodes);
+  view.classList.remove("enter");
+  void view.offsetWidth; // перезапуск анимации появления
+  view.classList.add("enter");
 }
 
 function notify(message) {
@@ -41,7 +49,13 @@ async function api(method, path, body) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
   }
-  const response = await fetch(path, options);
+  let response;
+  try {
+    response = await fetch(path, options);
+  } catch (e) {
+    notify("No connection. Check the network and try again.");
+    throw e;
+  }
   if (response.status === 401) {
     notify("Session expired. Reopen the app from /history.");
     throw new Error("unauthorized");
@@ -55,9 +69,20 @@ async function api(method, path, body) {
   return data;
 }
 
+function parseDate(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function formatDate(iso) {
   const [y, m, d] = iso.split("-");
   return `${d}-${m}-${y.slice(2)}`;
+}
+
+function formatLongDate(iso) {
+  return parseDate(iso).toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
 }
 
 function formatSet(set) {
@@ -77,39 +102,74 @@ function setTab(name) {
   }
 }
 
+function workoutRow(w) {
+  const date = parseDate(w.date);
+  const text = el("span", { className: "row-text" },
+    el("span", { textContent: date.toLocaleDateString("en-GB", { weekday: "long" }) }),
+  );
+  if (w.notes) text.append(el("span", { className: "row-subtitle", textContent: w.notes }));
+  return el("button", { className: "row", onclick: () => showWorkout(w.id) },
+    el("span", { className: "day", textContent: date.getDate() }),
+    text,
+    el("span", { className: "chevron", textContent: "›" }),
+  );
+}
+
 async function showList(refresh = false) {
   setTab("workouts");
   if (listView && !refresh) {
-    view.replaceChildren(listView);
+    show(listView);
     window.scrollTo(0, listScroll);
     return;
   }
 
-  const list = el("ul");
-  const more = el("button", { textContent: "Load more", hidden: true });
+  const groups = el("div");
+  const more = el("button", { className: "more", textContent: "Load more", hidden: true });
   let page = 0;
+  let month = null;
+  let group = null;
 
   async function loadPage() {
-    const data = await api("GET", `/api/workouts?page=${page + 1}`);
-    page = data.page;
-    for (const w of data.items) {
-      const title = w.notes ? `${formatDate(w.date)} — ${w.notes}` : formatDate(w.date);
-      list.append(el("li", {}, el("button", {
-        className: "row",
-        textContent: title,
-        onclick: () => showWorkout(w.id),
-      })));
+    // без этого двойное нажатие загрузит одну страницу дважды
+    more.disabled = true;
+    try {
+      const data = await api("GET", `/api/workouts?page=${page + 1}`);
+      page = data.page;
+      for (const w of data.items) {
+        const title = parseDate(w.date).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+        if (title !== month) {
+          month = title;
+          group = el("ul", { className: "section" });
+          groups.append(el("h4", { className: "section-title", textContent: title }), group);
+        }
+        group.append(el("li", {}, workoutRow(w)));
+      }
+      more.hidden = page >= data.total_pages;
+    } finally {
+      more.disabled = false;
     }
-    more.hidden = page >= data.total_pages;
   }
 
   more.onclick = loadPage;
-  listView = el("div", {}, list, more);
-  view.replaceChildren(listView);
-  await loadPage();
-  if (!list.children.length) {
-    listView.replaceChildren(el("p", { className: "hint", textContent: "No workouts yet." }));
+  listView = el("div", {}, groups, more);
+  try {
+    await loadPage();
+  } catch {
+    // иначе вкладка останется пустой до перезапуска приложения
+    listView = null;
+    show(el("div", { className: "empty" },
+      el("p", { textContent: "Workouts didn't load." }),
+      el("button", { textContent: "Try again", onclick: () => showList(true) }),
+    ));
+    return;
   }
+  if (!groups.children.length) {
+    listView.replaceChildren(el("p", {
+      className: "empty",
+      textContent: "No workouts yet. Log one with /workout in the chat.",
+    }));
+  }
+  show(listView);
 }
 
 async function showWorkout(id) {
@@ -118,20 +178,27 @@ async function showWorkout(id) {
 }
 
 function renderWorkout(w) {
-  const actions = el("div", { className: "actions" },
-    el("button", { textContent: "← Back", onclick: () => showList() }),
-    el("button", { textContent: "Edit", onclick: () => showEdit(w) }),
-    el("button", { textContent: "Delete", onclick: () => removeWorkout(w.id) }),
+  const head = el("div", { className: "workout-head" },
+    el("h2", { textContent: formatLongDate(w.date) }),
   );
-  const content = [actions, el("h2", { textContent: formatDate(w.date) })];
-  if (w.notes) content.push(el("p", { className: "hint", textContent: w.notes }));
-  for (const ex of w.exercises) {
-    content.push(
-      el("h3", { textContent: ex.name }),
-      el("ol", {}, ...ex.sets.map((s, i) => el("li", { textContent: `${i + 1}. ${formatSet(s)}` }))),
-    );
-  }
-  view.replaceChildren(...content);
+  if (w.notes) head.append(el("p", { className: "notes", textContent: w.notes }));
+  const exercises = w.exercises.map((ex) => el("section", { className: "section" },
+    el("h3", { textContent: ex.name }),
+    el("ol", { className: "sets" }, ...ex.sets.map((s, i) => el("li", {},
+      el("span", { className: "set-no", textContent: i + 1 }),
+      el("span", { textContent: formatSet(s) }),
+    ))),
+  ));
+  show(
+    el("div", { className: "actions" },
+      el("button", { textContent: "‹ Back", onclick: () => showList() }),
+      el("span", { className: "spacer" }),
+      el("button", { textContent: "Edit", onclick: () => showEdit(w) }),
+      el("button", { className: "destructive", textContent: "Delete", onclick: () => removeWorkout(w.id) }),
+    ),
+    head,
+    ...exercises,
+  );
   window.scrollTo(0, 0);
 }
 
@@ -163,15 +230,12 @@ function parseAmount(text, unit) {
 }
 
 function draftSet(set) {
+  const weight = set.weight === null ? "" : String(set.weight);
   if (set.seconds !== null) {
     const seconds = String(set.seconds % 60).padStart(2, "0");
-    return {
-      weight: set.weight === null ? "" : String(set.weight),
-      amount: `${Math.floor(set.seconds / 60)}:${seconds}`,
-      unit: "sec",
-    };
+    return { weight, amount: `${Math.floor(set.seconds / 60)}:${seconds}`, unit: "sec" };
   }
-  return { weight: set.weight === null ? "" : String(set.weight), amount: String(set.reps), unit: "reps" };
+  return { weight, amount: String(set.reps), unit: "reps" };
 }
 
 function showEdit(workout) {
@@ -202,6 +266,7 @@ function showEdit(workout) {
       input({ value: set.amount, inputMode: set.unit === "reps" ? "numeric" : "text" }, (v) => { set.amount = v; }),
       unit,
       el("button", {
+        className: "icon",
         textContent: "✕",
         onclick: () => { ex.sets.splice(ex.sets.indexOf(set), 1); render(); },
       }),
@@ -217,12 +282,13 @@ function showEdit(workout) {
   }
 
   function exerciseBlock(ex, index) {
-    return el("div", { className: "exercise" },
+    return el("section", { className: "section" },
       el("div", { className: "exercise-head" },
         el("h3", { textContent: ex.name }),
-        el("button", { textContent: "↑", onclick: () => move(index, -1) }),
-        el("button", { textContent: "↓", onclick: () => move(index, 1) }),
+        el("button", { className: "icon", textContent: "↑", onclick: () => move(index, -1) }),
+        el("button", { className: "icon", textContent: "↓", onclick: () => move(index, 1) }),
         el("button", {
+          className: "icon",
           textContent: "✕",
           onclick: () => { draft.exercises.splice(index, 1); render(); },
         }),
@@ -240,7 +306,7 @@ function showEdit(workout) {
   }
 
   function exerciseSearch() {
-    const results = el("ul");
+    const results = el("ul", { className: "section" });
     let timer = null;
     async function search(query) {
       const found = await api("GET", `/api/catalog?q=${encodeURIComponent(query)}`);
@@ -262,7 +328,7 @@ function showEdit(workout) {
       timer = setTimeout(() => search(v.trim()), 300);
     });
     search("");
-    return el("div", { className: "search" }, field, results);
+    return el("section", { className: "section search" }, field, results);
   }
 
   function buildBody() {
@@ -297,27 +363,33 @@ function showEdit(workout) {
     renderWorkout(saved);
   }
 
-  function render() {
+  // перерисовка после правки — без анимации, она только при входе в форму
+  function render(animate = false) {
     const addExercise = el("div");
     addExercise.append(el("button", {
       textContent: "+ Exercise",
       onclick: () => addExercise.replaceChildren(exerciseSearch()),
     }));
-    view.replaceChildren(
+    const nodes = [
       el("div", { className: "actions" },
-        el("button", { className: "active", textContent: "Save", onclick: save }),
         el("button", { textContent: "Cancel", onclick: () => renderWorkout(workout) }),
+        el("span", { className: "spacer" }),
+        el("button", { className: "primary", textContent: "Save", onclick: save }),
       ),
-      el("label", { textContent: "Date" }),
-      input({ type: "date", value: draft.date }, (v) => { draft.date = v; }),
-      el("label", { textContent: "Notes" }),
-      el("textarea", { value: draft.notes, rows: 2, oninput: (e) => { draft.notes = e.target.value; } }),
+      el("section", { className: "section" },
+        el("label", { textContent: "Date" }),
+        input({ type: "date", value: draft.date }, (v) => { draft.date = v; }),
+        el("label", { textContent: "Notes" }),
+        el("textarea", { value: draft.notes, rows: 2, oninput: (e) => { draft.notes = e.target.value; } }),
+      ),
       ...draft.exercises.map(exerciseBlock),
       addExercise,
-    );
+    ];
+    if (animate) show(...nodes);
+    else view.replaceChildren(...nodes);
   }
 
-  render();
+  render(true);
   window.scrollTo(0, 0);
 }
 
@@ -325,7 +397,7 @@ async function showProgress() {
   setTab("progress");
   const exercises = await api("GET", "/api/exercises");
   if (!exercises.length) {
-    view.replaceChildren(el("p", { className: "hint", textContent: "No exercises yet." }));
+    show(el("p", { className: "empty", textContent: "No exercises yet. Log a workout with /workout in the chat." }));
     return;
   }
 
@@ -333,44 +405,172 @@ async function showProgress() {
     ...exercises.map((ex) => el("option", { value: ex.id, textContent: ex.name })),
   );
   if (exercises.some((ex) => String(ex.id) === selectedExercise)) select.value = selectedExercise;
+  const summary = el("div", { className: "summary" });
   const canvas = el("canvas");
-  select.onchange = () => drawProgress(select.value, canvas);
-  view.replaceChildren(select, el("div", { className: "chart" }, canvas));
-  await drawProgress(select.value, canvas);
+  let data = null;
+
+  const periods = el("div", { className: "segmented" }, ...PERIODS.map(([name]) => el("button", {
+    textContent: name,
+    onclick: () => {
+      selectedPeriod = name;
+      markPeriod();
+      if (data) drawProgress(data, summary, canvas);
+    },
+  })));
+  function markPeriod() {
+    for (const button of periods.children) {
+      button.classList.toggle("active", button.textContent === selectedPeriod);
+    }
+  }
+  markPeriod();
+
+  async function load() {
+    selectedExercise = select.value;
+    data = await api("GET", `/api/exercises/${select.value}/progress`);
+    drawProgress(data, summary, canvas);
+  }
+  select.onchange = load;
+  show(el("section", { className: "section" },
+    select, summary, periods, el("div", { className: "chart" }, canvas),
+  ));
+  await load();
 }
 
-async function drawProgress(exerciseId, canvas) {
-  selectedExercise = exerciseId;
-  const data = await api("GET", `/api/exercises/${exerciseId}/progress`);
+function periodStart() {
+  const months = new Map(PERIODS).get(selectedPeriod);
+  if (months === null) return null;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setMonth(start.getMonth() - months);
+  return start;
+}
+
+function formatValue(value, metric) {
+  if (metric === "weight") return `${value} kg`;
+  if (metric === "reps") return `${value} reps`;
+  const seconds = String(Math.abs(value) % 60).padStart(2, "0");
+  return `${Math.floor(Math.abs(value) / 60)}:${seconds}`;
+}
+
+function formatShortDate(iso) {
+  return parseDate(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function withAlpha(hex, alpha) {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return "transparent";
+  const n = parseInt(match[1], 16);
+  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+function renderSummary(summary, points, metric) {
+  const first = points[0];
+  const last = points[points.length - 1];
+  // вычитание float даёт хвосты вроде 0.30000000000000004
+  const change = Math.round((last.value - first.value) * 100) / 100;
+  let trend = "Only one workout in this period";
+  if (points.length > 1) {
+    const sign = change > 0 ? "+" : change < 0 ? "−" : "";
+    trend = change === 0
+      ? `Same as on ${formatShortDate(first.date)}`
+      : `${sign}${formatValue(Math.abs(change), metric)} since ${formatShortDate(first.date)}`;
+  }
+  summary.replaceChildren(
+    el("div", { className: "summary-value", textContent: formatValue(last.value, metric) }),
+    el("div", { className: "summary-trend", textContent: trend }),
+  );
+}
+
+function drawProgress(data, summary, canvas) {
+  if (chart) chart.destroy();
+  chart = null;
+  const start = periodStart();
+  const points = data.points.filter((p) => start === null || parseDate(p.date) >= start);
+  canvas.parentElement.hidden = !points.length;
+  if (!points.length) {
+    summary.replaceChildren(el("p", { className: "empty", textContent: "No workouts in this period." }));
+    return;
+  }
+  renderSummary(summary, points, data.metric);
+
+  // ось X — настоящее время: перерыв в месяц не должен выглядеть как соседний день
+  const from = start === null ? parseDate(points[0].date).getTime() : start.getTime();
+  const to = Math.max(Date.now(), parseDate(points[points.length - 1].date).getTime());
+  const long = to - from > 180 * 24 * 3600 * 1000;
+  const tickFormat = long ? { month: "short", year: "2-digit" } : { day: "numeric", month: "short" };
+
   const accent = cssColor("--accent");
   const hint = cssColor("--hint");
-  if (chart) chart.destroy();
+  const text = cssColor("--text");
   chart = new Chart(canvas, {
     type: "line",
     data: {
-      labels: data.points.map((p) => formatDate(p.date)),
       datasets: [{
-        data: data.points.map((p) => p.value),
+        data: points.map((p) => ({ x: parseDate(p.date).getTime(), y: p.value })),
         borderColor: accent,
-        backgroundColor: accent,
-        pointRadius: 3,
+        borderWidth: 2.5,
+        cubicInterpolationMode: "monotone",
+        fill: "start",
+        backgroundColor: ({ chart: c }) => {
+          if (!c.chartArea) return "transparent";
+          const gradient = c.ctx.createLinearGradient(0, c.chartArea.top, 0, c.chartArea.bottom);
+          gradient.addColorStop(0, withAlpha(accent, 0.25));
+          gradient.addColorStop(1, withAlpha(accent, 0));
+          return gradient;
+        },
+        pointRadius: points.length === 1 ? 4 : 0,
+        pointBackgroundColor: accent,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: accent,
+        pointHoverBorderColor: cssColor("--section"),
+        pointHoverBorderWidth: 2,
       }],
     },
     options: {
       animation: false,
       maintainAspectRatio: false,
+      // касание в любом месте показывает ближайшую тренировку
+      interaction: { mode: "nearest", axis: "x", intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: { label: (ctx) => data.points[ctx.dataIndex].sets.map(formatSet) },
+          backgroundColor: cssColor("--section"),
+          titleColor: text,
+          bodyColor: text,
+          borderColor: cssColor("--separator"),
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            title: (items) => formatLongDate(points[items[0].dataIndex].date),
+            label: (ctx) => points[ctx.dataIndex].sets.map(formatSet),
+          },
         },
       },
       scales: {
-        x: { ticks: { color: hint }, grid: { display: false } },
+        x: {
+          type: "linear",
+          min: from,
+          max: to,
+          border: { display: false },
+          grid: { display: false },
+          ticks: {
+            color: hint,
+            maxRotation: 0,
+            autoSkipPadding: 16,
+            maxTicksLimit: 5,
+            callback: (value) => new Date(value).toLocaleDateString("en-GB", tickFormat),
+          },
+        },
         y: {
-          title: { display: true, text: UNITS[data.metric], color: hint },
-          ticks: { color: hint },
-          grid: { color: cssColor("--line") },
+          border: { display: false },
+          grid: { color: cssColor("--separator") },
+          ticks: {
+            color: hint,
+            maxTicksLimit: 5,
+            callback: (value) => (data.metric === "seconds" ? formatValue(value, "seconds") : value),
+          },
         },
       },
     },
@@ -381,4 +581,9 @@ tabs.workouts.onclick = () => showList();
 tabs.progress.onclick = () => showProgress();
 tg.ready();
 tg.expand();
+if (inTelegram && tg.isVersionAtLeast("6.1")) {
+  // шапка и фон Telegram того же цвета, что и страница
+  tg.setHeaderColor("secondary_bg_color");
+  tg.setBackgroundColor("secondary_bg_color");
+}
 showList();
