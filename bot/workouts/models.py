@@ -24,7 +24,7 @@ class Workout(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[date] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(Text)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
 
 class WorkoutExercise(Base):
@@ -39,9 +39,9 @@ class WorkoutExercise(Base):
     __tablename__ = "workout_exercises"
     id: Mapped[int] = mapped_column(primary_key=True)
     position: Mapped[int] = mapped_column(SmallInteger)
-    workout_id: Mapped[int] = mapped_column(ForeignKey("workouts.id"))
+    workout_id: Mapped[int] = mapped_column(ForeignKey("workouts.id"), index=True)
     exercise_id: Mapped[int | None] = mapped_column(
-        ForeignKey("exercises.id", ondelete="SET NULL")
+        ForeignKey("exercises.id", ondelete="SET NULL"), index=True
     )
     exercise_name: Mapped[str] = mapped_column(String(128))
 
@@ -58,7 +58,9 @@ class Set(Base):
         ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
-    workout_exercise_id: Mapped[int] = mapped_column(ForeignKey("workout_exercises.id"))
+    workout_exercise_id: Mapped[int] = mapped_column(
+        ForeignKey("workout_exercises.id"), index=True
+    )
     reps: Mapped[int | None] = mapped_column(SmallInteger)
     seconds: Mapped[int | None] = mapped_column(SmallInteger)
     weight: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
