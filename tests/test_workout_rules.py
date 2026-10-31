@@ -28,6 +28,8 @@ from bot.workouts.service import check_deleted_entries
         (Decimal("NaN"), 5),
         (Decimal("Infinity"), 5),
         (Decimal("999.995"), 5),  # после округления — 1000.00
+        (Decimal("1" * 27), 5),  # не влезает в точность Decimal при округлении
+        (Decimal("1e30"), 5),
     ],
 )
 def test_set_out_of_bounds(weight, reps):

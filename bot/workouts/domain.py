@@ -8,7 +8,7 @@
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 # Границы берутся из схемы (models.Set): вес — Numeric(5, 2), повторения и
 # секунды — SmallInteger. Всё, что не влезает, раньше доходило до INSERT и
@@ -49,7 +49,12 @@ class SetEntry:
                 raise InvalidWorkout("weight must be a non-negative number")
             # округляем до масштаба колонки здесь, иначе Postgres округлит сам
             # и в истории окажется не то число, что бот показал при вводе
-            weight = weight.quantize(WEIGHT_STEP, rounding=ROUND_HALF_UP)
+            try:
+                weight = weight.quantize(WEIGHT_STEP, rounding=ROUND_HALF_UP)
+            except InvalidOperation as e:
+                # слишком длинное число: два знака после запятой не влезают
+                # в точность Decimal
+                raise InvalidWorkout(f"weight must be at most {MAX_WEIGHT}") from e
             if weight > MAX_WEIGHT:
                 raise InvalidWorkout(f"weight must be at most {MAX_WEIGHT}")
         return cls(weight=weight, reps=reps, seconds=seconds)

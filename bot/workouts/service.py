@@ -58,7 +58,9 @@ async def update_workout(
         return False
     check_deleted_entries(record, before)
     names = await _catalog_names(session, record)
-    await repo.replace(workout_id, record, names)
+    # тренировку могли удалить между чтением и заменой
+    if not await repo.replace(workout_id, record, names):
+        return False
     await session.commit()
     return True
 
