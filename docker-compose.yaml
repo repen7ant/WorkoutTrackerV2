@@ -51,6 +51,22 @@ services:
       - ./settings.toml:/app/settings.toml
       - ./bot:/app/bot
 
+  history-web:
+    container_name: history-web
+    build: .
+    command: uv run -m history_web
+    environment:
+      - DB__URL=${DB_URL_INTERNAL}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./settings.toml:/app/settings.toml
+      - ./bot:/app/bot
+      - ./history_web:/app/history_web
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
   migrations:
     container_name: migrations
     environment:

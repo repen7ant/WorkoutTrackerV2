@@ -3,6 +3,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.catalog.api import ExerciseInfo
 from bot.workouts.domain import (
     LoggedExercise,
     LoggedWorkout,
@@ -92,10 +93,10 @@ class WorkoutRepository:
         return await self._load(*filters)
 
     async def with_exercise(
-        self, exercise_id: int, user_id: int, limit: int = 10
+        self, exercise_id: int, user_id: int, limit: int | None = 10
     ) -> list[LoggedWorkout]:
-        """Последние limit тренировок с этим упражнением, от старых к новым;
-        в каждой — только оно."""
+        """Последние limit тренировок с этим упражнением (None — все), от старых
+        к новым; в каждой — только оно."""
         recent = (
             select(Workout.id)
             .where(
@@ -112,6 +113,21 @@ class WorkoutRepository:
         return await self._load(
             Workout.id.in_(recent), WorkoutExercise.exercise_id == exercise_id
         )
+
+    async def logged_exercises(self, user_id: int) -> list[ExerciseInfo]:
+        """Упражнения из истории пользователя по алфавиту, кроме удалённых из
+        каталога; название — из последней тренировки с ним."""
+        result = await self.session.execute(
+            select(WorkoutExercise.exercise_id, WorkoutExercise.exercise_name)
+            .join(Workout, Workout.id == WorkoutExercise.workout_id)
+            .where(Workout.user_id == user_id, WorkoutExercise.exercise_id.isnot(None))
+            .distinct(WorkoutExercise.exercise_id)
+            .order_by(
+                WorkoutExercise.exercise_id, Workout.date.desc(), Workout.id.desc()
+            )
+        )
+        exercises = [ExerciseInfo(id=i, name=n) for i, n in result.tuples().all()]
+        return sorted(exercises, key=lambda ex: ex.name)
 
     async def _load(self, *filters) -> list[LoggedWorkout]:
         """Тренировки от старых к новым; упражнения — в порядке выполнения,
