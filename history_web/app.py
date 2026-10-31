@@ -1,14 +1,20 @@
+import json
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from aiohttp import web
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from bot.catalog.api import Catalog
+from bot.workouts.domain import InvalidWorkout
 from bot.workouts.repository import WorkoutRepository
+from bot.workouts.service import delete_workout, update_workout
 from history_web.auth import Unauthorized, user_id_from_init_data
 from history_web.progress import build_progress
 from history_web.schemas import (
     progress_to_json,
+    record_from_json,
     workout_summary_to_json,
     workout_to_json,
 )
@@ -44,7 +50,10 @@ async def api_middleware(request: web.Request, handler) -> web.StreamResponse:
 
     async with request.app[sessionmaker_key]() as session:
         request["session"] = session
-        return await handler(request)
+        try:
+            return await handler(request)
+        except InvalidWorkout as e:
+            return error(400, str(e))
 
 
 @routes.get("/")
@@ -77,6 +86,39 @@ async def get_workout(request: web.Request) -> web.Response:
     if workout is None:
         return error(404, "not found")
     return web.json_response(workout_to_json(workout))
+
+
+@routes.put(r"/api/workouts/{id:\d+}")
+async def put_workout(request: web.Request) -> web.Response:
+    try:
+        body = json.loads(await request.text(), parse_float=Decimal)
+    except json.JSONDecodeError:
+        return error(400, "invalid json")
+    record = record_from_json(request["user_id"], body)
+    workout_id = int(request.match_info["id"])
+    if not await update_workout(request["session"], workout_id, record):
+        return error(404, "not found")
+    workout = await WorkoutRepository(request["session"]).get(
+        workout_id, request["user_id"]
+    )
+    return web.json_response(workout_to_json(workout))
+
+
+@routes.delete(r"/api/workouts/{id:\d+}")
+async def remove_workout(request: web.Request) -> web.Response:
+    if not await delete_workout(
+        request["session"], int(request.match_info["id"]), request["user_id"]
+    ):
+        return error(404, "not found")
+    return web.Response(status=204)
+
+
+@routes.get("/api/catalog")
+async def search_catalog(request: web.Request) -> web.Response:
+    found, _ = await Catalog(request["session"]).search(
+        request.query.get("q", ""), request["user_id"]
+    )
+    return web.json_response([{"id": ex.id, "name": ex.name} for ex in found])
 
 
 @routes.get("/api/exercises")
