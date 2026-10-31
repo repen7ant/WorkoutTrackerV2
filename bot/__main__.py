@@ -36,7 +36,7 @@ async def main() -> None:
         json_loads=fsm_json.loads,
     )
 
-    dp = Dispatcher(storage=storage)
+    dp = Dispatcher(storage=storage, history_config=settings.history)
     dp.update.middleware(DbSessionMiddleware(AsyncSessionLocal))
     dp.update.middleware(UserMiddleware())
     dp.update.middleware(SubFSMMiddleware(EXERCISES_DESTINY))

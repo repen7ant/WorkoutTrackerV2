@@ -1,5 +1,5 @@
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
@@ -42,3 +42,8 @@ def history_detail_kb(page: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="← Back", callback_data=HistoryPage(page=page).pack())
     return builder.as_markup()
+
+
+def miniapp_kb(url: str) -> InlineKeyboardMarkup:
+    button = InlineKeyboardButton(text="Open history", web_app=WebAppInfo(url=url))
+    return InlineKeyboardMarkup(inline_keyboard=[[button]])
