@@ -63,6 +63,15 @@
 2. Напистаь prod-версию docker-compose.yaml ✅
 3. Исправить время внутри контейнеров ✅
 
+## 6. История в Telegram Mini App
+
+1. Индексы для чтения всей истории упражнения ✅
+2. Проверка `initData` и API для чтения ✅
+3. Страница со списком тренировок и графиками прогресса ✅
+4. Переключатель `/history` в боте ✅
+5. HTTPS через nginx сервера, деплой ✅
+6. Редактирование и удаление тренировок ✅
+
 # Полезные ссылки (которые оказались не очень полезными)
 
 aiogram quickstart
@@ -153,6 +162,19 @@ https://docs.docker.com/compose/gettingstarted#step-3-fix-the-startup-race-with-
 
 - Вывести список тренировок с датами.
 - При выборе тренировки — показать упражнения, подходы и заметки (детализация по нажатию / пагинация).
+- Если включён Mini App (`[history]` в `settings.toml`), вместо списка — кнопка `Open history`: страница со списком тренировок, графиками прогресса по упражнениям, редактированием и удалением тренировок.
+
+**Mini App локально** (`[db] url` — `localhost:5430`, токен любой):
+
+```bash
+docker compose up -d db
+uv run alembic upgrade head && uv run -m bot.data.seed
+uv run -m history_web.dev_seed 1   # тестовые тренировки для user_id 1
+uv run -m history_web              # http://localhost:8080
+uv run -m history_web.dev_link 1   # ссылка с подписанной initData для браузера
+```
+
+**Mini App на сервере:** `history-web` слушает `127.0.0.1:8084`, HTTPS делает nginx сервера (сайт с `proxy_pass http://127.0.0.1:8084` + сертификат через certbot), A-запись домена на сервер, `webapp_url` в `[history]`.
 
 ## 3. /workout — Запись тренировки
 

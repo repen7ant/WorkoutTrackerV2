@@ -1,0 +1,55 @@
+.section > li + li {
+  /* разделитель начинается после числа, как в списках Telegram */
+  background: linear-gradient(var(--separator), var(--separator)) right top / calc(100% - 62px) 1px no-repeat;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 0;
+  color: var(--text);
+  text-align: left;
+}
+
+.row:active {
+  transform: none;
+  background: var(--pressed);
+}
+
+.day {
+  flex: none;
+  width: 32px;
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row-subtitle {
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--hint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  font-size: 22px;
+  color: var(--hint);
+}
+
+.more {
+  display: block;
+  width: 100%;
+  padding: 12px;
+}

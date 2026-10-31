@@ -52,5 +52,5 @@ ignore = [
 # таймзоне там взяться неоткуда.
 
 [tool.ruff.lint.per-file-ignores]
-# assert — основной инструмент pytest
-"tests/*" = ["S101"]
+# assert — основной инструмент pytest; токены в тестах ненастоящие
+"tests/*" = ["S101", "S105"]

@@ -11,6 +11,14 @@ url = "redis://redis:6379/0"
 # аналогично db: на сервере бот в одной сети с redis, локально он в host-сети,
 # поэтому там нужно redis://localhost:6379/0
 
+[history]
+# "chat" — /history отвечает текстовым списком, "miniapp" — кнопкой Mini App
+mode = "chat"
+# адрес Mini App (только HTTPS); без него /history всегда текстовый
+# webapp_url = "https://history.example.com"
+# получают кнопку Mini App и в режиме chat
+beta_user_ids = []
+
 [logs]
 project_name = "workout_tracker"
 show_datetime = true

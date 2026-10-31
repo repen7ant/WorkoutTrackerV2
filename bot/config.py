@@ -31,6 +31,29 @@ class RedisConfig(BaseModel):
     url: str = "redis://redis:6379/0"
 
 
+class HistoryMode(StrEnum):
+    CHAT = "chat"
+    MINIAPP = "miniapp"
+
+
+class HistoryConfig(BaseModel):
+    """
+    Чем отвечает /history: текстовым списком или кнопкой Mini App.
+
+    beta_user_ids получают Mini App и в режиме chat — так он включается
+    сначала для разработчика, а потом для всех.
+    """
+
+    mode: HistoryMode = HistoryMode.CHAT
+    webapp_url: str | None = None
+    beta_user_ids: list[int] = []
+
+    def uses_miniapp(self, user_id: int) -> bool:
+        if self.webapp_url is None:
+            return False
+        return self.mode == HistoryMode.MINIAPP or user_id in self.beta_user_ids
+
+
 class LogConfig(BaseModel):
     project_name: str
     show_datetime: bool
@@ -64,6 +87,7 @@ class Settings(BaseSettings):
     logs: LogConfig
     db: DatabaseConfig
     redis: RedisConfig = RedisConfig()
+    history: HistoryConfig = HistoryConfig()
 
     """
     Задаём параметры чтения конфига:

@@ -77,6 +77,24 @@ services:
       seed:
         condition: service_completed_successfully
 
+  history-web:
+    image: ghcr.io/${GHCR_OWNER}/workout-tracker:latest
+    container_name: history-web
+    restart: unless-stopped
+    command: uv run -m history_web
+    environment:
+      TZ: Europe/Moscow
+    # только для nginx на сервере: HTTPS для Mini App делает он
+    ports:
+      - "127.0.0.1:8084:8080"
+    volumes:
+      - ./settings.toml:/app/settings.toml
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
 volumes:
   postgres_data:
   redis_data:

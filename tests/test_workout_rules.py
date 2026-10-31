@@ -9,11 +9,14 @@ from bot.workouts.domain import (
     MAX_SECONDS,
     ExerciseEntry,
     InvalidWorkout,
+    LoggedExercise,
+    LoggedWorkout,
     SetEntry,
     WorkoutRecord,
 )
 from bot.workouts.draft import build_record, set_to_fsm, sets_from_fsm
 from bot.workouts.handlers.recording import parse_set
+from bot.workouts.service import check_deleted_entries
 
 
 @pytest.mark.parametrize(
@@ -25,6 +28,8 @@ from bot.workouts.handlers.recording import parse_set
         (Decimal("NaN"), 5),
         (Decimal("Infinity"), 5),
         (Decimal("999.995"), 5),  # после округления — 1000.00
+        (Decimal("1" * 27), 5),  # не влезает в точность Decimal при округлении
+        (Decimal("1e30"), 5),
     ],
 )
 def test_set_out_of_bounds(weight, reps):
@@ -133,3 +138,46 @@ def test_drafts_started_before_timed_sets_still_load():
     sets = [{"weight": None, "reps": 10}]
     assert sets_from_fsm(sets) == [SetEntry(None, 10)]
     assert build_record(1, _draft(sets)).exercises[0].sets == (SetEntry(None, 10),)
+
+
+def test_deleted_entry_keeps_name():
+    entry = ExerciseEntry.deleted(" Old custom ", [SetEntry.create(None, 10)])
+    assert (entry.exercise_id, entry.name) == (None, "Old custom")
+
+
+@pytest.mark.parametrize(("name", "sets"), [("  ", [SetEntry(None, 10)]), ("Old", [])])
+def test_deleted_entry_needs_name_and_sets(name, sets):
+    with pytest.raises(InvalidWorkout):
+        ExerciseEntry.deleted(name, sets)
+
+
+BEFORE = LoggedWorkout(
+    id=1,
+    date=date(2026, 10, 30),
+    notes=None,
+    exercises=[
+        LoggedExercise(7, "Bench Press", [SetEntry(Decimal("60.00"), 5)]),
+        LoggedExercise(None, "Old custom", [SetEntry(None, 10)]),
+    ],
+)
+
+
+def record(*entries):
+    return WorkoutRecord.create(1, date(2026, 10, 30), None, list(entries))
+
+
+def test_kept_deleted_exercise_allowed():
+    check_deleted_entries(
+        record(
+            ExerciseEntry.create(7, [SetEntry(Decimal("60.00"), 5)]),
+            ExerciseEntry.deleted("Old custom", [SetEntry(None, 12)]),
+        ),
+        BEFORE,
+    )
+
+
+def test_new_deleted_exercise_rejected():
+    with pytest.raises(InvalidWorkout):
+        check_deleted_entries(
+            record(ExerciseEntry.deleted("Bench Press", [SetEntry(None, 5)])), BEFORE
+        )

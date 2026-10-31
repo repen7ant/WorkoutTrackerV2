@@ -1,0 +1,76 @@
+.workout-head {
+  margin: 4px 4px 16px;
+}
+
+.workout-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.notes {
+  margin: 4px 0 0;
+  color: var(--hint);
+}
+
+.sets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sets li {
+  display: flex;
+  gap: 12px;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-no {
+  width: 1.2em;
+  text-align: right;
+  color: var(--hint);
+}
+
+/* форма редактирования */
+
+section.section .exercise-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+section.section .exercise-head h3 {
+  flex: 1;
+  margin: 0;
+}
+
+.set {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.set input {
+  width: 4.5em;
+  min-width: 0;
+}
+
+.set select {
+  width: auto;
+}
+
+.search input {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.search .section {
+  margin: 0;
+  background: var(--page);
+}
+
+.search .section > li + li {
+  background-size: calc(100% - 16px) 1px;
+}

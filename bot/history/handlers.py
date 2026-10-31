@@ -3,12 +3,14 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.config import HistoryConfig
 from bot.history.formatters import format_workout_detail
 from bot.history.keyboards import (
     HistoryDetail,
     HistoryPage,
     history_detail_kb,
     history_list_kb,
+    miniapp_kb,
 )
 from bot.users.models import User
 from bot.workouts.repository import WorkoutRepository
@@ -39,7 +41,19 @@ async def send_history_page(
 
 
 @router.message(Command("history"))
-async def cmd_history(message: Message, session: AsyncSession, db_user: User) -> None:
+async def cmd_history(
+    message: Message,
+    session: AsyncSession,
+    db_user: User,
+    history_config: HistoryConfig,
+) -> None:
+    if history_config.uses_miniapp(db_user.id):
+        await message.answer(
+            "<b>Workout history:</b>",
+            parse_mode="HTML",
+            reply_markup=miniapp_kb(history_config.webapp_url),
+        )
+        return
     await send_history_page(message, session, db_user.id, page=1)
 
 
