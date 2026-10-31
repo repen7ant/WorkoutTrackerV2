@@ -22,7 +22,7 @@ def main() -> None:
     init_data = sign_init_data(token, int(sys.argv[1]), datetime.now(UTC))
     print(
         f"http://localhost:8080/#tgWebAppData={quote(init_data, safe='')}"
-        "&tgWebAppVersion=8.0&tgWebAppPlatform=web"
+        "&tgWebAppVersion=8.0"
     )
 
 
