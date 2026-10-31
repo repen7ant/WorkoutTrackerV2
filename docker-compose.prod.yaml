@@ -77,6 +77,37 @@ services:
       seed:
         condition: service_completed_successfully
 
+  history-web:
+    image: ghcr.io/${GHCR_OWNER}/workout-tracker:latest
+    container_name: history-web
+    restart: unless-stopped
+    command: uv run -m history_web
+    environment:
+      TZ: Europe/Moscow
+    volumes:
+      - ./settings.toml:/app/settings.toml
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  # HTTPS для Mini App: сертификат Let's Encrypt Caddy получает сам,
+  # для этого домен должен смотреть на сервер, а 80/443 — быть открыты
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${HISTORY_DOMAIN} --to history-web:8080
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+    depends_on:
+      - history-web
+
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
