@@ -1,0 +1,128 @@
+button {
+  font: inherit;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.12s ease, opacity 0.12s ease;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+button.primary {
+  padding: 8px 18px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+button.destructive {
+  color: var(--destructive);
+}
+
+button.icon {
+  padding: 6px 8px;
+  color: var(--hint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+
+  button:active {
+    transform: none;
+  }
+}
+
+/* ряд кнопок над экраном: Back / Edit / Delete, Cancel / Save */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.actions button {
+  padding: 8px 16px;
+  background: var(--section);
+  font-weight: 500;
+}
+
+.actions button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* переключатели: вкладки и период графика */
+
+nav,
+.segmented {
+  display: flex;
+  gap: 2px;
+  margin: 12px 0 8px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--pressed);
+}
+
+nav button,
+.segmented button {
+  flex: 1;
+  padding: 7px 0;
+  color: var(--text);
+  font-weight: 500;
+}
+
+nav button.active,
+.segmented button.active {
+  background: var(--section);
+}
+
+/* поля */
+
+label {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--header);
+}
+
+label + input,
+label + textarea {
+  margin-bottom: 12px;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--text);
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+}
+
+select {
+  width: 100%;
+}

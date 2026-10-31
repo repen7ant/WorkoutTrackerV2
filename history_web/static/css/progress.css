@@ -1,0 +1,24 @@
+.summary {
+  margin: 16px 0 4px;
+}
+
+.summary-value {
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-trend {
+  font-size: 14px;
+  color: var(--hint);
+}
+
+.segmented {
+  margin: 12px 0 0;
+}
+
+.chart {
+  position: relative;
+  height: 260px;
+  margin-top: 12px;
+}
