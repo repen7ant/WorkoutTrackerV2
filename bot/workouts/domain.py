@@ -57,14 +57,26 @@ class SetEntry:
 
 @dataclass(frozen=True)
 class ExerciseEntry:
-    exercise_id: int
+    exercise_id: int | None  # None — упражнение удалено из каталога
     sets: tuple[SetEntry, ...]
+    name: str | None = None  # только у удалённого: каталог его уже не знает
 
     @classmethod
     def create(cls, exercise_id: int, sets: list[SetEntry]) -> "ExerciseEntry":
         if not sets:
             raise InvalidWorkout("exercise must have at least one set")
         return cls(exercise_id=exercise_id, sets=tuple(sets))
+
+    @classmethod
+    def deleted(cls, name: str, sets: list[SetEntry]) -> "ExerciseEntry":
+        """Удалённое из каталога упражнение, которое осталось в тренировке
+        при её правке."""
+        name = name.strip()
+        if not name:
+            raise InvalidWorkout("deleted exercise must have a name")
+        if not sets:
+            raise InvalidWorkout("exercise must have at least one set")
+        return cls(exercise_id=None, sets=tuple(sets), name=name)
 
 
 @dataclass(frozen=True)

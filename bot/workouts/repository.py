@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import ExerciseInfo
@@ -31,12 +31,49 @@ class WorkoutRepository:
         workout = Workout(user_id=record.user_id, date=record.date, notes=record.notes)
         self.session.add(workout)
         await self.session.flush()
+        await self._insert_exercises(workout.id, record, names)
+        return workout.id
 
+    async def replace(
+        self, workout_id: int, record: WorkoutRecord, names: dict[int, str]
+    ) -> bool:
+        """Заменяет тренировку целиком. False — её нет или она чужая."""
+        result = await self.session.execute(
+            update(Workout)
+            .where(Workout.id == workout_id, Workout.user_id == record.user_id)
+            .values(date=record.date, notes=record.notes)
+        )
+        if result.rowcount == 0:
+            return False
+        await self._delete_exercises(workout_id)
+        await self._insert_exercises(workout_id, record, names)
+        return True
+
+    async def delete(self, workout_id: int, user_id: int) -> bool:
+        """False — тренировки нет или она чужая."""
+        owned = await self.session.execute(
+            select(Workout.id).where(
+                Workout.id == workout_id, Workout.user_id == user_id
+            )
+        )
+        if owned.first() is None:
+            return False
+        await self._delete_exercises(workout_id)
+        await self.session.execute(delete(Workout).where(Workout.id == workout_id))
+        return True
+
+    async def _insert_exercises(
+        self, workout_id: int, record: WorkoutRecord, names: dict[int, str]
+    ) -> None:
         for position, entry in record.positioned():
             we = WorkoutExercise(
-                workout_id=workout.id,
+                workout_id=workout_id,
                 exercise_id=entry.exercise_id,
-                exercise_name=names[entry.exercise_id],
+                exercise_name=(
+                    entry.name
+                    if entry.exercise_id is None
+                    else names[entry.exercise_id]
+                ),
                 position=position,
             )
             self.session.add(we)
@@ -50,9 +87,19 @@ class WorkoutRepository:
                 )
                 for s in entry.sets
             )
-
         await self.session.flush()
-        return workout.id
+
+    async def _delete_exercises(self, workout_id: int) -> None:
+        # каскада на внешних ключах нет: сначала подходы, потом упражнения
+        exercise_ids = select(WorkoutExercise.id).where(
+            WorkoutExercise.workout_id == workout_id
+        )
+        await self.session.execute(
+            delete(Set).where(Set.workout_exercise_id.in_(exercise_ids))
+        )
+        await self.session.execute(
+            delete(WorkoutExercise).where(WorkoutExercise.workout_id == workout_id)
+        )
 
     async def page(
         self, user_id: int, page: int, per_page: int = 10
