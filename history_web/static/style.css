@@ -88,3 +88,62 @@ select {
   height: 300px;
   margin-top: 12px;
 }
+
+input,
+textarea {
+  box-sizing: border-box;
+  font: inherit;
+  padding: 6px;
+  border: 1px solid var(--hint);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+textarea {
+  width: 100%;
+}
+
+label {
+  display: block;
+  margin: 12px 0 4px;
+  color: var(--hint);
+}
+
+.exercise {
+  margin: 16px 0;
+}
+
+.exercise-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.exercise-head h3 {
+  flex: 1;
+}
+
+.set {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.set input {
+  width: 5em;
+  min-width: 0;
+}
+
+.set select {
+  width: auto;
+}
+
+.search {
+  margin-top: 12px;
+}
+
+.search input {
+  width: 100%;
+}
