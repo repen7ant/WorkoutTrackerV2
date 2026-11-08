@@ -35,10 +35,11 @@ router = Router(name="workout_recording")
 # после upper(): «1:30» — минуты:секунды, «45S» — секунды
 _MIN_SEC = re.compile(r"(\d+):([0-5]\d)")
 _SEC = re.compile(r"(\d+)S")
-# после upper(): русская «Х» вместо X и запятая в весе — с телефона так пишут часто
-_SET_TYPOS = str.maketrans({"\u0425": "X", ",": "."})
-# буквы формата подхода после upper(): X и русская Х, BW, S у секунд
-_SET_LETTERS = frozenset("XBWS\u0425")
+# после upper(): русские «Х» и «С» (секунды) вместо X и S, запятая в весе —
+# с телефона так пишут часто
+_SET_TYPOS = str.maketrans({"\u0425": "X", "\u0421": "S", ",": "."})
+# буквы формата подхода после upper(): X и русская Х, BW, S и русская С у секунд
+_SET_LETTERS = frozenset("XBWS\u0425\u0421")
 
 
 def is_note(text: str | None) -> bool:

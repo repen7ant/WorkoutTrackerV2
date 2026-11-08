@@ -20,6 +20,7 @@ from bot.workouts.handlers.recording import is_note, parse_set
 from bot.workouts.service import check_deleted_entries
 
 CYR_X = "\u0445"  # русская «х»
+CYR_S = "\u0441"  # русская «с» — секунды
 
 
 @pytest.mark.parametrize(
@@ -105,6 +106,8 @@ def test_positions_follow_exercise_order():
         ("82,5x5", SetEntry(Decimal("82.50"), 5)),
         ("BW" + CYR_X + "1:30", SetEntry(None, seconds=90)),
         ("82,5,5x5", None),
+        ("BWx45" + CYR_S, SetEntry(None, seconds=45)),
+        ("20" + CYR_X + "45" + CYR_S.upper(), SetEntry(Decimal("20.00"), seconds=45)),
     ],
 )
 def test_parse_set(text, expected):
@@ -249,6 +252,7 @@ def test_drafts_started_before_notes_still_load():
         ("BWx1:30", False),
         ("bwx10", False),
         ("20x45s", False),
+        ("BWx45" + CYR_S, False),
         ("", False),
         (None, False),
     ],
