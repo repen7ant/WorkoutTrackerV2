@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.users.models import User
@@ -17,3 +18,8 @@ async def get_or_register(
         user.username = username
         await session.commit()
     return user
+
+
+async def all_user_ids(session: AsyncSession) -> list[int]:
+    result = await session.execute(select(User.id).order_by(User.id))
+    return list(result.scalars().all())
