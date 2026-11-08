@@ -19,6 +19,7 @@ from bot.catalog.keyboards import (
 from bot.catalog.repository import ExerciseRepository
 from bot.catalog.service import add_exercise, delete_exercise
 from bot.catalog.states import ExerciseAdd, ExerciseSearch
+from bot.common.formatting import escape
 from bot.filters import ExState
 from bot.users.models import User
 from bot.workouts.states import WorkoutSession
@@ -167,11 +168,11 @@ async def add_muscles(
     await ex_state.clear()
     if exercise is None:
         await message.answer(
-            f"Exercise <b>{data['name']}</b> already exists.", parse_mode="HTML"
+            f"Exercise <b>{escape(data['name'])}</b> already exists.", parse_mode="HTML"
         )
     else:
         await message.answer(
-            f"Exercise <b>{data['name']}</b> added.", parse_mode="HTML"
+            f"Exercise <b>{escape(data['name'])}</b> added.", parse_mode="HTML"
         )
     await send_exercise_page(message, session, page=1, user_id=db_user.id)
 
@@ -206,7 +207,8 @@ async def cb_delete(
         await call.answer("Exercise not found or access denied.", show_alert=True)
         return
     await call.message.edit_text(
-        f"Delete <b>{exercise.name}</b>?\nWorkouts you've already logged will keep it.",
+        f"Delete <b>{escape(exercise.name)}</b>?\n"
+        "Workouts you've already logged will keep it.",
         parse_mode="HTML",
         reply_markup=delete_confirm_kb(callback_data.exercise_id),
     )

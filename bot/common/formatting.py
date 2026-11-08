@@ -1,6 +1,12 @@
+import html
 from collections.abc import Iterable
 
 from bot.workouts.domain import SetEntry
+
+
+def escape(text: str) -> str:
+    """Текст пользователя для сообщений с parse_mode="HTML"."""
+    return html.escape(text, quote=False)
 
 
 def format_weight(weight) -> str:
