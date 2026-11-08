@@ -40,9 +40,9 @@ def format_exercise_log(exercise_name: str, workouts: list[LoggedWorkout]) -> st
     lines = [f"<b>{escape(exercise_name)}</b>\n"]
     for workout in workouts:
         lines.append(f"<b>{workout.date.strftime('%d-%m-%y')}</b>")
-        if workout.notes:
-            lines.append(f"<i>{escape(workout.notes)}</i>")
         for ex in workout.exercises:
+            if ex.notes:
+                lines.append(f"<i>{escape(ex.notes)}</i>")
             lines.extend(format_set_lines(ex.sets))
         lines.append("")
     return "\n".join(lines)

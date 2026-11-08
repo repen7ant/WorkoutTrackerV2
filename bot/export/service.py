@@ -12,6 +12,7 @@ class ExportExercise(TypedDict):
     name: str
     muscles: list[str]
     sets: list[SetEntry]
+    notes: str | None
 
 
 class ExportWorkout(TypedDict):
@@ -49,6 +50,7 @@ async def collect_workouts(
                     # у удалённого упражнения мышц уже нет
                     muscles=muscles.get(ex.exercise_id, []),
                     sets=ex.sets,
+                    notes=ex.notes,
                 )
                 for ex in w.exercises
             ],

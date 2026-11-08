@@ -11,6 +11,11 @@ def _format_weight_compact(weight: Decimal | None) -> str:
     return f"{weight.normalize():f}"
 
 
+def _one_line(text: str) -> str:
+    # в заметке из Telegram бывают переводы строк, а в логе запись — одна строка
+    return " ".join(text.split())
+
+
 AI_TASK = """## TASK
 Cover every point below. Lean on the actual numbers in the log: cite specific
 dates, weights and rep counts instead of giving generic advice.
@@ -84,6 +89,8 @@ def build_ai_prompt(
         "- Below it, one line per exercise. `Bench Press: 100x5, 100x5, 102.5x4`",
         "  means weight in kilograms x repetitions, sets listed in the order they",
         "  were performed.",
+        "- A `notes:` part after an exercise's sets is the athlete's comment on that",
+        "  exercise.",
         "- `BW` in place of a weight means bodyweight only, no external load.",
         "- A time in place of reps (`BWx1:30`, minutes:seconds) marks a timed set:",
         "  the load was held or carried that long. Leave timed sets out of tonnage",
@@ -103,14 +110,17 @@ def build_ai_prompt(
     for workout in workouts:
         header = workout["date"].isoformat()
         if workout["notes"]:
-            header += f" | notes: {workout['notes']}"
+            header += f" | notes: {_one_line(workout['notes'])}"
         lines.append(header)
         for ex in workout["exercises"]:
             sets_str = ", ".join(
                 f"{_format_weight_compact(s.weight)}x{format_amount(s)}"
                 for s in ex["sets"]
             )
-            lines.append(f"  {ex['name']}: {sets_str}")
+            line = f"  {ex['name']}: {sets_str}"
+            if ex["notes"]:
+                line += f" | notes: {_one_line(ex['notes'])}"
+            lines.append(line)
         lines.append("")
 
     lines.append(AI_TASK)

@@ -43,6 +43,7 @@ def test_export_shows_timed_sets():
                     SetEntry.create(Decimal("32"), seconds=45),
                     SetEntry.create(Decimal("32"), seconds=75),
                 ],
+                notes=None,
             )
         ],
     )
@@ -125,3 +126,41 @@ def test_remove_note_button_only_with_notes():
 
     assert "wk_remove_note" in callbacks(set_entered_kb(has_notes=True))
     assert "wk_remove_note" not in callbacks(set_entered_kb())
+
+
+WORKOUT = LoggedWorkout(
+    1,
+    date(2026, 1, 1),
+    "week 3",
+    [LoggedExercise(7, "Bench Press", [SetEntry(None, 5)], notes="<no bench>")],
+)
+
+
+def test_exercise_log_shows_exercise_notes_instead_of_workout_notes():
+    text = format_exercise_log("Bench Press", [WORKOUT])
+    assert "week 3" not in text
+    assert "<b>01-01-26</b>\n<i>&lt;no bench&gt;</i>\n  1. BW x 5" in text
+
+
+def test_workout_detail_shows_both_notes():
+    text = format_workout_detail(WORKOUT)
+    assert text.startswith("<b>01-01-26</b>\n<i>week 3</i>")
+    assert "<b>Bench Press</b>\n<i>&lt;no bench&gt;</i>\n  1. BW x 5" in text
+
+
+def test_export_keeps_notes_on_one_line():
+    workout = ExportWorkout(
+        date=date(2026, 1, 1),
+        notes="bad\nsleep",
+        exercises=[
+            ExportExercise(
+                name="Bench Press",
+                muscles=[],
+                sets=[SetEntry.create(Decimal("100"), 5)],
+                notes="no bench,\nfloor press",
+            )
+        ],
+    )
+    lines = build_ai_prompt([workout], "all time", None, date(2026, 1, 2)).splitlines()
+    assert "2026-01-01 | notes: bad sleep" in lines
+    assert "  Bench Press: 100x5 | notes: no bench, floor press" in lines

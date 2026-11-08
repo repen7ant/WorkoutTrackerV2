@@ -9,6 +9,8 @@ def format_workout_detail(workout: LoggedWorkout) -> str:
     lines.append("")
     for ex in workout.exercises:
         lines.append(f"<b>{escape(ex.name)}</b>")
+        if ex.notes:
+            lines.append(f"<i>{escape(ex.notes)}</i>")
         lines.extend(format_set_lines(ex.sets))
         lines.append("")
     return "\n".join(lines)
