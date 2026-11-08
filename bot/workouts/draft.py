@@ -1,12 +1,13 @@
 """
 Черновик тренировки в FSM и его превращение в WorkoutRecord.
 
-  exercises: [{"exercise_id": int, "exercise_name": str,
+  exercises: [{"exercise_id": int, "exercise_name": str, "notes": str | None,
                "sets": [{"weight": Decimal | None, "reps": int | None,
                          "seconds": int | None}]}]
 
-Ключ seconds появился с подходами на время: в черновиках, начатых раньше,
-его нет, и они должны сохраняться так же.
+Ключи seconds и notes появились позже — с подходами на время и заметками
+к упражнениям: в черновиках, начатых раньше, их нет, и такие черновики
+должны сохраняться так же.
 """
 
 from datetime import date
@@ -35,6 +36,7 @@ def build_record(user_id: int, data: dict[str, Any]) -> WorkoutRecord:
                 SetEntry.create(s["weight"], s["reps"], s.get("seconds"))
                 for s in ex["sets"]
             ],
+            ex.get("notes"),
         )
         for ex in data.get("exercises", [])
     ]

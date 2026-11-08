@@ -75,6 +75,7 @@ class WorkoutRepository:
                     else names[entry.exercise_id]
                 ),
                 position=position,
+                notes=entry.notes,
             )
             self.session.add(we)
             await self.session.flush()
@@ -201,7 +202,10 @@ class WorkoutRepository:
                 )
             if we.id not in entries:
                 entries[we.id] = LoggedExercise(
-                    exercise_id=we.exercise_id, name=we.exercise_name, sets=[]
+                    exercise_id=we.exercise_id,
+                    name=we.exercise_name,
+                    sets=[],
+                    notes=we.notes,
                 )
                 workouts[workout.id].exercises.append(entries[we.id])
             entries[we.id].sets.append(

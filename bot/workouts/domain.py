@@ -17,6 +17,9 @@ MAX_WEIGHT = Decimal("999.99")
 WEIGHT_STEP = Decimal("0.01")
 MAX_REPS = 32767
 MAX_SECONDS = 32767
+# заметки упражнения идут в лог из 10 тренировок, а сообщение Telegram —
+# не длиннее 4096 символов
+MAX_EXERCISE_NOTES = 200
 
 
 class InvalidWorkout(ValueError):
@@ -60,20 +63,37 @@ class SetEntry:
         return cls(weight=weight, reps=reps, seconds=seconds)
 
 
+def exercise_notes(text: str | None) -> str | None:
+    """Заметка к упражнению: без пробелов по краям, пустая — None."""
+    text = text.strip() if text else None
+    if text and len(text) > MAX_EXERCISE_NOTES:
+        raise InvalidWorkout(
+            f"exercise notes must be at most {MAX_EXERCISE_NOTES} characters"
+        )
+    return text or None
+
+
 @dataclass(frozen=True)
 class ExerciseEntry:
     exercise_id: int | None  # None — упражнение удалено из каталога
     sets: tuple[SetEntry, ...]
     name: str | None = None  # только у удалённого: каталог его уже не знает
+    notes: str | None = None
 
     @classmethod
-    def create(cls, exercise_id: int, sets: list[SetEntry]) -> "ExerciseEntry":
+    def create(
+        cls, exercise_id: int, sets: list[SetEntry], notes: str | None = None
+    ) -> "ExerciseEntry":
         if not sets:
             raise InvalidWorkout("exercise must have at least one set")
-        return cls(exercise_id=exercise_id, sets=tuple(sets))
+        return cls(
+            exercise_id=exercise_id, sets=tuple(sets), notes=exercise_notes(notes)
+        )
 
     @classmethod
-    def deleted(cls, name: str, sets: list[SetEntry]) -> "ExerciseEntry":
+    def deleted(
+        cls, name: str, sets: list[SetEntry], notes: str | None = None
+    ) -> "ExerciseEntry":
         """Удалённое из каталога упражнение, которое осталось в тренировке
         при её правке."""
         name = name.strip()
@@ -81,7 +101,9 @@ class ExerciseEntry:
             raise InvalidWorkout("deleted exercise must have a name")
         if not sets:
             raise InvalidWorkout("exercise must have at least one set")
-        return cls(exercise_id=None, sets=tuple(sets), name=name)
+        return cls(
+            exercise_id=None, sets=tuple(sets), name=name, notes=exercise_notes(notes)
+        )
 
 
 @dataclass(frozen=True)
@@ -128,6 +150,7 @@ class LoggedExercise:
     exercise_id: int | None  # None — упражнение удалено из каталога
     name: str  # название на момент тренировки
     sets: list[SetEntry]
+    notes: str | None = None
 
 
 @dataclass(frozen=True)

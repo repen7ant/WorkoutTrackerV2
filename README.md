@@ -135,6 +135,7 @@ https://docs.docker.com/compose/gettingstarted#step-3-fix-the-startup-race-with-
 - workout_id INT FK → workouts.id
 - exercise_id INT FK → exercises.id
 - position SMALLINT -- порядок упражнений в тренировке
+- notes TEXT nullable -- заметка к упражнению в этой тренировке
 
 ## sets -- конкретный подход
 

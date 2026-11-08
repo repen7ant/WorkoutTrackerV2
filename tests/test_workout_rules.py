@@ -13,6 +13,7 @@ from bot.workouts.domain import (
     LoggedWorkout,
     SetEntry,
     WorkoutRecord,
+    exercise_notes,
 )
 from bot.workouts.draft import build_record, set_to_fsm, sets_from_fsm
 from bot.workouts.handlers.recording import parse_set
@@ -188,3 +189,46 @@ def test_new_deleted_exercise_rejected():
         check_deleted_entries(
             record(ExerciseEntry.deleted("Bench Press", [SetEntry(None, 5)])), BEFORE
         )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("   ", None),
+        (" no bench ", "no bench"),
+        ("x" * 200, "x" * 200),
+    ],
+)
+def test_exercise_notes_cleaned(text, expected):
+    assert exercise_notes(text) == expected
+
+
+def test_exercise_notes_too_long():
+    with pytest.raises(InvalidWorkout):
+        exercise_notes("x" * 201)
+
+
+def test_entries_keep_notes():
+    sets = [SetEntry.create(None, 5)]
+    assert ExerciseEntry.create(7, sets, " no bench ").notes == "no bench"
+    assert ExerciseEntry.deleted("Old", sets, "sore").notes == "sore"
+    assert ExerciseEntry.create(7, sets).notes is None
+
+
+def test_entry_rejects_long_notes():
+    with pytest.raises(InvalidWorkout):
+        ExerciseEntry.create(7, [SetEntry.create(None, 5)], "x" * 201)
+
+
+def test_build_record_keeps_exercise_notes():
+    data = _draft([{"weight": None, "reps": 10}])
+    data["exercises"][0]["notes"] = "no bench"
+    assert build_record(1, data).exercises[0].notes == "no bench"
+
+
+def test_drafts_started_before_notes_still_load():
+    """У упражнений в черновиках, начатых до обновления, нет ключа notes."""
+    record = build_record(1, _draft([{"weight": None, "reps": 10}]))
+    assert record.exercises[0].notes is None

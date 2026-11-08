@@ -44,6 +44,7 @@ class WorkoutExercise(Base):
         ForeignKey("exercises.id", ondelete="SET NULL"), index=True
     )
     exercise_name: Mapped[str] = mapped_column(String(128))
+    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class Set(Base):
