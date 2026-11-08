@@ -29,6 +29,8 @@ router = Router(name="workout_recording")
 # после upper(): «1:30» — минуты:секунды, «45S» — секунды
 _MIN_SEC = re.compile(r"(\d+):([0-5]\d)")
 _SEC = re.compile(r"(\d+)S")
+# после upper(): русская «Х» вместо X и запятая в весе — с телефона так пишут часто
+_SET_TYPOS = str.maketrans({"\u0425": "X", ",": "."})
 
 
 def _parse_seconds(text: str) -> int | None:
@@ -45,7 +47,7 @@ def parse_set(text: str | None) -> SetEntry | None:
     # в состоянии ввода подходов может прилететь стикер или фото — там text is None
     if not text:
         return None
-    parts = text.strip().upper().split("X")
+    parts = text.strip().upper().translate(_SET_TYPOS).split("X")
     if len(parts) != 2:
         return None
     weight_str, amount_str = parts

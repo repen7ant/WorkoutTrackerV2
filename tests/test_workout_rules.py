@@ -18,6 +18,8 @@ from bot.workouts.draft import build_record, set_to_fsm, sets_from_fsm
 from bot.workouts.handlers.recording import parse_set
 from bot.workouts.service import check_deleted_entries
 
+CYR_X = "\u0445"  # русская «х»
+
 
 @pytest.mark.parametrize(
     ("weight", "reps"),
@@ -97,6 +99,11 @@ def test_positions_follow_exercise_order():
         ("bwx0:05", SetEntry(None, seconds=5)),
         ("BWx1:60", None),
         ("BWx0:00", None),
+        ("100" + CYR_X + "5", SetEntry(Decimal("100.00"), 5)),
+        ("100" + CYR_X.upper() + "5", SetEntry(Decimal("100.00"), 5)),
+        ("82,5x5", SetEntry(Decimal("82.50"), 5)),
+        ("BW" + CYR_X + "1:30", SetEntry(None, seconds=90)),
+        ("82,5,5x5", None),
     ],
 )
 def test_parse_set(text, expected):
