@@ -10,6 +10,7 @@
 .notes {
   margin: 4px 0 0;
   color: var(--hint);
+  white-space: pre-line;
 }
 
 .sets {

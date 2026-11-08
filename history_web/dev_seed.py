@@ -42,7 +42,9 @@ def build_workout(user_id: int, day: date, i: int, ids: dict[str, int]):
     plank = 30 + 5 * (i // 3)
     exercises = [
         ExerciseEntry.create(
-            ids["Bench Press"], [SetEntry.create(bench, 5) for _ in range(3)]
+            ids["Bench Press"],
+            [SetEntry.create(bench, 5) for _ in range(3)],
+            "no spotter\nstayed at 3 sets" if i % 4 == 0 else None,
         ),
         ExerciseEntry.create(
             ids["Squat"], [SetEntry.create(squat, 5) for _ in range(3)]

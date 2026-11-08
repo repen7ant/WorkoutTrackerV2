@@ -16,6 +16,8 @@ export function renderWorkout(w) {
   if (w.notes) head.append(el("p", { className: "notes", textContent: w.notes }));
   const exercises = w.exercises.map((ex) => el("section", { className: "section" },
     el("h3", { textContent: ex.name }),
+    // el добавляет детей через append, null стал бы текстом «null»
+    ...(ex.notes ? [el("p", { className: "notes", textContent: ex.notes })] : []),
     el("ol", { className: "sets" }, ...ex.sets.map((s, i) => el("li", {},
       el("span", { className: "set-no", textContent: i + 1 }),
       el("span", { textContent: formatSet(s) }),

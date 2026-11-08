@@ -33,6 +33,7 @@ def workout_to_json(w: LoggedWorkout) -> dict[str, Any]:
             {
                 "exercise_id": ex.exercise_id,
                 "name": ex.name,
+                "notes": ex.notes,
                 "sets": [set_to_json(s) for s in ex.sets],
             }
             for ex in w.exercises
@@ -91,13 +92,20 @@ def _exercise_from_json(data: Any) -> ExerciseEntry:
         raise InvalidWorkout("exercise must be an object")
     if not isinstance(data.get("sets"), list):
         raise InvalidWorkout("sets must be a list")
+    # PUT заменяет тренировку целиком: старая страница из кэша, которая не знает
+    # о заметках, без этой проверки молча стёрла бы их
+    if "notes" not in data:
+        raise InvalidWorkout("exercise notes are missing, reopen the app")
+    notes = data["notes"]
+    if notes is not None and not isinstance(notes, str):
+        raise InvalidWorkout("exercise notes must be a string")
     sets = [_set_from_json(s) for s in data["sets"]]
     exercise_id = _optional_int(data.get("exercise_id"), "exercise_id")
     if exercise_id is not None:
-        return ExerciseEntry.create(exercise_id, sets)
+        return ExerciseEntry.create(exercise_id, sets, notes)
     if not isinstance(data.get("name"), str):
         raise InvalidWorkout("deleted exercise must have a name")
-    return ExerciseEntry.deleted(data["name"], sets)
+    return ExerciseEntry.deleted(data["name"], sets, notes)
 
 
 def record_from_json(user_id: int, body: Any) -> WorkoutRecord:

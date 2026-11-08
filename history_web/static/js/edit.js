@@ -22,6 +22,7 @@ export function showEdit(workout) {
     exercises: workout.exercises.map((ex) => ({
       exercise_id: ex.exercise_id,
       name: ex.name,
+      notes: ex.notes || "",
       sets: ex.sets.map(draftSet),
     })),
   };
@@ -69,6 +70,14 @@ export function showEdit(workout) {
           onclick: () => { draft.exercises.splice(index, 1); render(); },
         }),
       ),
+      // textarea, а не input: input вырезает переводы строк из заметки
+      el("textarea", {
+        value: ex.notes,
+        rows: 2,
+        maxLength: 200,
+        placeholder: "Note",
+        oninput: (e) => { ex.notes = e.target.value; },
+      }),
       ...ex.sets.map((set) => setRow(ex, set)),
       el("button", {
         textContent: "+ Set",
@@ -93,6 +102,7 @@ export function showEdit(workout) {
           draft.exercises.push({
             exercise_id: ex.id,
             name: ex.name,
+            notes: "",
             sets: [{ weight: "", amount: "", unit: "reps" }],
           });
           render();
@@ -114,6 +124,7 @@ export function showEdit(workout) {
       exercises: draft.exercises.map((ex) => ({
         exercise_id: ex.exercise_id,
         name: ex.name,
+        notes: ex.notes,
         sets: ex.sets.map((set) => {
           const amount = parseAmount(set.amount, set.unit);
           return {
