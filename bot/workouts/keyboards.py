@@ -30,9 +30,11 @@ def exercise_choices_kb(exercises: list) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def set_entered_kb() -> InlineKeyboardMarkup:
+def set_entered_kb(has_notes: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="Finish exercise", callback_data="wk_finish_exercise")
+    if has_notes:
+        builder.button(text="Remove note", callback_data="wk_remove_note")
     builder.button(text="Cancel exercise", callback_data="wk_cancel_exercise")
     builder.adjust(1)
     return builder.as_markup()

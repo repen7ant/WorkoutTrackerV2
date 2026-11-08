@@ -16,7 +16,7 @@ from bot.workouts.domain import (
     exercise_notes,
 )
 from bot.workouts.draft import build_record, set_to_fsm, sets_from_fsm
-from bot.workouts.handlers.recording import parse_set
+from bot.workouts.handlers.recording import is_note, parse_set
 from bot.workouts.service import check_deleted_entries
 
 CYR_X = "\u0445"  # русская «х»
@@ -232,3 +232,26 @@ def test_drafts_started_before_notes_still_load():
     """У упражнений в черновиках, начатых до обновления, нет ключа notes."""
     record = build_record(1, _draft([{"weight": None, "reps": 10}]))
     assert record.exercises[0].notes is None
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("плечо болит", True),
+        ("no bench, did floor press", True),
+        ("100kg x 5", True),
+        ("100x5", False),
+        ("100" + CYR_X + "5", False),
+        ("82,5x5", False),
+        ("100 5", False),
+        ("100x", False),
+        ("100*5", False),
+        ("BWx1:30", False),
+        ("bwx10", False),
+        ("20x45s", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_is_note(text, expected):
+    assert is_note(text) is expected

@@ -10,9 +10,11 @@ from bot.history.formatters import format_workout_detail
 from bot.workouts.domain import LoggedExercise, LoggedWorkout, SetEntry
 from bot.workouts.formatters import (
     format_confirm,
+    format_current_sets,
     format_exercise_log,
     format_workout_main,
 )
+from bot.workouts.keyboards import set_entered_kb
 
 NASTY = "<3 & co"
 SAFE = "&lt;3 &amp; co"
@@ -76,3 +78,50 @@ def test_confirm_escapes_notes():
 def test_exercise_list_escapes_names_and_muscles():
     text = format_exercise_list([Exercise(name=NASTY, muscles=[Muscle(name=NASTY)])])
     assert f"1. {SAFE}\n   {SAFE}" in text
+
+
+FOOTER = "Enter next set, a note, or finish exercise:"
+SETS = [SetEntry.create(Decimal("100"), 5)] * 2
+
+
+def test_current_sets_show_name_notes_and_sets():
+    assert format_current_sets("Bench Press", "<no bench>", SETS) == (
+        "<b>Bench Press</b>\n<i>&lt;no bench&gt;</i>\n\n"
+        "1. 100.00kg x 5\n2. 100.00kg x 5\n\n" + FOOTER
+    )
+
+
+def test_current_sets_without_notes():
+    assert format_current_sets("Bench Press", None, SETS[:1]) == (
+        "<b>Bench Press</b>\n\n1. 100.00kg x 5\n\n" + FOOTER
+    )
+
+
+def test_current_sets_notes_before_first_set():
+    assert format_current_sets("Bench Press", "no bench", []) == (
+        "<b>Bench Press</b>\n<i>no bench</i>\n\n" + FOOTER
+    )
+
+
+def test_workout_main_shows_exercise_notes():
+    text = format_workout_main(
+        [
+            {
+                "exercise_name": "Bench Press",
+                "notes": "no bench",
+                "sets": [{"weight": None, "reps": 5}],
+            },
+            # черновик, начатый до обновления
+            {"exercise_name": "Squat", "sets": [{"weight": None, "reps": 5}]},
+        ]
+    )
+    assert "<b>Bench Press</b>\n<i>no bench</i>\n  1. BW x 5" in text
+    assert "<b>Squat</b>\n  1. BW x 5" in text
+
+
+def test_remove_note_button_only_with_notes():
+    def callbacks(kb):
+        return [b.callback_data for row in kb.inline_keyboard for b in row]
+
+    assert "wk_remove_note" in callbacks(set_entered_kb(has_notes=True))
+    assert "wk_remove_note" not in callbacks(set_entered_kb())

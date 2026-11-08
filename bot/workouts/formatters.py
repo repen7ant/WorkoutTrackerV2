@@ -12,14 +12,25 @@ def format_workout_main(exercises: list[dict[str, Any]]) -> str:
     lines = ["<b>Current workout:</b>\n"]
     for ex in exercises:
         lines.append(f"<b>{escape(ex['exercise_name'])}</b>")
+        # у черновиков, начатых до заметок к упражнениям, ключа нет
+        if ex.get("notes"):
+            lines.append(f"<i>{escape(ex['notes'])}</i>")
         lines.extend(format_set_lines(sets_from_fsm(ex["sets"])))
         lines.append("")
     return "\n".join(lines)
 
 
-def format_current_sets(sets: list[SetEntry]) -> str:
-    lines = ["<b>Current workout:</b>\n", *format_set_lines(sets, indent="")]
-    return "\n".join(lines) + "\n\nEnter next set or finish exercise:"
+def format_current_sets(
+    exercise_name: str, notes: str | None, sets: list[SetEntry]
+) -> str:
+    lines = [f"<b>{escape(exercise_name)}</b>"]
+    if notes:
+        lines.append(f"<i>{escape(notes)}</i>")
+    lines.append("")
+    if sets:
+        lines.extend([*format_set_lines(sets, indent=""), ""])
+    lines.append("Enter next set, a note, or finish exercise:")
+    return "\n".join(lines)
 
 
 def format_exercise_log(exercise_name: str, workouts: list[LoggedWorkout]) -> str:
