@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -9,6 +9,7 @@ from bot.export.keyboards import ExportPeriod, export_period_kb
 from bot.export.prompt import build_ai_prompt
 from bot.export.service import collect_workouts
 from bot.users.models import User
+from bot.users.settings import local_now
 
 router = Router(name="export")
 
@@ -42,7 +43,7 @@ async def cb_export_period(
         return
     label, days = period
 
-    today = date.today()
+    today = local_now(db_user.utc_offset).date()
     since = today - timedelta(days=days) if days is not None else None
 
     workouts = await collect_workouts(session, db_user.id, since)

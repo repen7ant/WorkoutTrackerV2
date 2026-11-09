@@ -18,3 +18,7 @@ class User(Base):
     exercise_log_size: Mapped[int] = mapped_column(
         SmallInteger, default=10, server_default="10"
     )
+    # часовой пояс — минуты от UTC; 180 — Москва
+    utc_offset: Mapped[int] = mapped_column(
+        SmallInteger, default=180, server_default="180"
+    )

@@ -149,7 +149,11 @@ def test_losing_tap_of_double_save_is_silent():
     msg = FakeMessage(format_workout_main(DRAFT["exercises"]), None)
     call = FakeCall(msg)
     user = User(
-        id=1, ask_workout_date=False, ask_workout_notes=False, exercise_log_size=10
+        id=1,
+        ask_workout_date=False,
+        ask_workout_notes=False,
+        exercise_log_size=10,
+        utc_offset=180,
     )
     state = make_state(WorkoutSession.active)
     asyncio.run(finishing.cb_finish_confirm(call, state, None, user))

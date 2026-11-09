@@ -1,5 +1,5 @@
 from contextlib import suppress
-from datetime import date, datetime
+from datetime import datetime
 from enum import Enum, auto
 
 from aiogram import F, Router
@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.users.models import User
+from bot.users.settings import local_now
 from bot.workouts.domain import InvalidWorkout
 from bot.workouts.draft import build_record
 from bot.workouts.formatters import format_confirm
@@ -37,6 +38,10 @@ class Step(Enum):
     CONFIRM = auto()  # экран подтверждения с датой и заметкой
     YES_NO = auto()  # yes/no прямо в окне тренировки
     SAVE = auto()
+
+
+def _today(user: User) -> str:
+    return local_now(user.utc_offset).date().isoformat()
 
 
 def step_after_finish(ask_date: bool, ask_notes: bool) -> Step:
@@ -125,7 +130,7 @@ async def cb_finish(call: CallbackQuery, state: FSMContext, db_user: User) -> No
             await remove_kb(call)
             await call.message.answer(DATE_PROMPT, reply_markup=finish_date_kb())
         case Step.NOTES:
-            await state.update_data(workout_date=date.today().isoformat())
+            await state.update_data(workout_date=_today(db_user))
             await remove_kb(call)
             await _ask_notes(call.message, state)
         case Step.YES_NO:
@@ -140,7 +145,7 @@ async def cb_finish(call: CallbackQuery, state: FSMContext, db_user: User) -> No
 async def cb_finish_confirm(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await state.update_data(workout_date=date.today().isoformat(), notes=None)
+    await state.update_data(workout_date=_today(db_user), notes=None)
     await _save(call, state, session, db_user.id, restore_kb=workout_main_kb())
 
 
@@ -173,7 +178,7 @@ async def cb_back_to_date(
 async def cb_date_today(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await state.update_data(workout_date=date.today().isoformat())
+    await state.update_data(workout_date=_today(db_user))
     match step_after_date(db_user.ask_workout_notes, typed=False):
         case Step.NOTES:
             await remove_kb(call)

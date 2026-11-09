@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.users.models import User
-from bot.users.settings import LOG_SIZES, Setting
+from bot.users.settings import LOG_SIZES, UTC_OFFSETS, Setting
 
 
 async def get_or_register(
@@ -33,6 +33,10 @@ async def update_setting(
             if value not in LOG_SIZES:
                 return
             user.exercise_log_size = value
+        case Setting.TIMEZONE:
+            if value not in UTC_OFFSETS:
+                return
+            user.utc_offset = value
     await session.commit()
 
 
