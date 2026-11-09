@@ -20,6 +20,17 @@ def format_workout_main(exercises: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def format_sets_prompt(exercise_name: str | None = None) -> str:
+    prompt = (
+        "Enter set (e.g. <code>100x5</code>, <code>BWx10</code>"
+        " or time <code>BWx1:30</code> / <code>BWx90s</code>)"
+        " or any text to add a note:"
+    )
+    if exercise_name is None:
+        return prompt
+    return f"<b>{escape(exercise_name)}</b>\n\n{prompt}"
+
+
 def format_current_sets(
     exercise_name: str, notes: str | None, sets: list[SetEntry]
 ) -> str:

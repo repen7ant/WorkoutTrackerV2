@@ -20,7 +20,11 @@ from bot.workouts.domain import (
     exercise_notes,
 )
 from bot.workouts.draft import set_to_fsm, sets_from_fsm
-from bot.workouts.formatters import format_current_sets, format_exercise_log
+from bot.workouts.formatters import (
+    format_current_sets,
+    format_exercise_log,
+    format_sets_prompt,
+)
 from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_main
 from bot.workouts.keyboards import (
     ExerciseChoice,
@@ -135,19 +139,22 @@ async def cb_exercise_chosen(
     if exercise is None:
         await call.answer("Exercise not found.", show_alert=True)
         return
-    log = await WorkoutRepository(session).with_exercise(
-        exercise_id=exercise.id, user_id=db_user.id, limit=10
-    )
+    log_size = db_user.exercise_log_size
+    if log_size:
+        log = await WorkoutRepository(session).with_exercise(
+            exercise_id=exercise.id, user_id=db_user.id, limit=log_size
+        )
     await remove_kb(call)
-    await call.message.answer(
-        format_exercise_log(exercise.name, log), parse_mode="HTML"
-    )
+    if log_size:
+        await call.message.answer(
+            format_exercise_log(exercise.name, log), parse_mode="HTML"
+        )
+        prompt = format_sets_prompt()
+    else:
+        # без лога название упражнения больше нигде не видно
+        prompt = format_sets_prompt(exercise.name)
     sent = await call.message.answer(
-        "Enter set (e.g. <code>100x5</code>, <code>BWx10</code>"
-        " or time <code>BWx1:30</code> / <code>BWx90s</code>)"
-        " or any text to add a note:",
-        parse_mode="HTML",
-        reply_markup=set_entered_kb(),
+        prompt, parse_mode="HTML", reply_markup=set_entered_kb()
     )
     await state.set_state(WorkoutSession.entering_sets)
     await state.update_data(

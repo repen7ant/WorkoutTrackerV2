@@ -12,6 +12,7 @@ from bot.workouts.formatters import (
     format_confirm,
     format_current_sets,
     format_exercise_log,
+    format_sets_prompt,
     format_workout_main,
 )
 from bot.workouts.keyboards import set_entered_kb
@@ -164,3 +165,18 @@ def test_export_keeps_notes_on_one_line():
     lines = build_ai_prompt([workout], "all time", None, date(2026, 1, 2)).splitlines()
     assert "2026-01-01 | notes: bad sleep" in lines
     assert "  Bench Press: 100x5 | notes: no bench, floor press" in lines
+
+
+SETS_PROMPT = (
+    "Enter set (e.g. <code>100x5</code>, <code>BWx10</code>"
+    " or time <code>BWx1:30</code> / <code>BWx90s</code>)"
+    " or any text to add a note:"
+)
+
+
+def test_sets_prompt_without_name():
+    assert format_sets_prompt() == SETS_PROMPT
+
+
+def test_sets_prompt_starts_with_escaped_name():
+    assert format_sets_prompt(NASTY) == f"<b>{SAFE}</b>\n\n{SETS_PROMPT}"
