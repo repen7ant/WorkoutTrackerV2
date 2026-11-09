@@ -104,6 +104,9 @@ https://docs.docker.com/compose/gettingstarted#step-3-fix-the-startup-race-with-
 ## users
 
 - id BIGINT (telegram user id)
+- ask_workout_date BOOLEAN -- спрашивать дату при завершении тренировки (иначе сегодня)
+- ask_workout_notes BOOLEAN -- спрашивать заметку к тренировке
+- exercise_log_size SMALLINT -- сколько прошлых тренировок показывать при выборе упражнения, 0 — не показывать
 
 ## exercises
 
