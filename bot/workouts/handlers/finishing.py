@@ -27,6 +27,9 @@ from bot.workouts.states import WorkoutSession
 
 router = Router(name="workout_finishing")
 
+DATE_PROMPT = "Choose workout date:"
+NOTES_PROMPT = "Add notes or skip:"
+
 
 class Step(Enum):
     DATE = auto()
@@ -51,7 +54,7 @@ def step_after_date(ask_notes: bool, typed: bool) -> Step:
 
 async def _ask_notes(message: Message, state: FSMContext) -> None:
     await state.set_state(WorkoutSession.entering_notes)
-    msg = await message.answer("Add notes or skip:", reply_markup=finish_notes_kb())
+    msg = await message.answer(NOTES_PROMPT, reply_markup=finish_notes_kb())
     await state.update_data(notes_prompt_msg_id=msg.message_id)
 
 
@@ -71,7 +74,13 @@ async def _save(
     user_id: int,
     restore_kb: InlineKeyboardMarkup,
 ) -> None:
-    await remove_kb(call)  # снимаем сразу, чтобы двойной тап не сохранил дважды
+    try:
+        # снимаем сразу, чтобы двойной тап не сохранил дважды
+        await remove_kb(call)
+    except TelegramBadRequest:
+        # кнопок уже нет: тренировку сохраняет первое нажатие
+        await call.answer()
+        return
     try:
         record = build_record(user_id, await state.get_data())
         await record_workout(session, record)
@@ -114,9 +123,7 @@ async def cb_finish(call: CallbackQuery, state: FSMContext, db_user: User) -> No
         case Step.DATE:
             await state.set_state(WorkoutSession.finishing)
             await remove_kb(call)
-            await call.message.answer(
-                "Choose workout date:", reply_markup=finish_date_kb()
-            )
+            await call.message.answer(DATE_PROMPT, reply_markup=finish_date_kb())
         case Step.NOTES:
             await state.update_data(workout_date=date.today().isoformat())
             await remove_kb(call)
@@ -154,7 +161,7 @@ async def cb_back_to_date(
     if db_user.ask_workout_date:
         await state.set_state(WorkoutSession.finishing)
         await call.message.delete()
-        await call.message.answer("Choose workout date:", reply_markup=finish_date_kb())
+        await call.message.answer(DATE_PROMPT, reply_markup=finish_date_kb())
     else:
         await state.set_state(WorkoutSession.active)
         await send_workout_main(call, state)
@@ -246,8 +253,12 @@ async def cb_edit_notes(call: CallbackQuery, state: FSMContext) -> None:
 # отменить всю тренировку
 @router.callback_query(F.data == "wk_cancel")
 async def cb_cancel(call: CallbackQuery, state: FSMContext) -> None:
+    # вопрос — в тексте: иначе голые Yes / No встали бы под текст шага,
+    # на экране подтверждения — под «Save workout?»
     with suppress(TelegramBadRequest):
-        await call.message.edit_reply_markup(reply_markup=cancel_confirm_kb())
+        await call.message.edit_text(
+            "Cancel workout?", reply_markup=cancel_confirm_kb()
+        )
     await call.answer()
 
 
@@ -261,23 +272,19 @@ async def cb_cancel_confirm(call: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "wk_cancel_abort")
 async def cb_cancel_abort(call: CallbackQuery, state: FSMContext) -> None:
     current = await state.get_state()
-    if current == WorkoutSession.active:
-        kb = workout_main_kb()
-    elif current == WorkoutSession.finishing:
-        kb = finish_date_kb()
-    elif current == WorkoutSession.entering_date:
-        await state.set_state(WorkoutSession.finishing)
-        with suppress(TelegramBadRequest):
-            await call.message.edit_reply_markup(reply_markup=None)
-        await call.message.answer("Choose workout date:", reply_markup=finish_date_kb())
-        await call.answer()
-        return
-    elif current == WorkoutSession.entering_notes:
-        kb = finish_notes_kb()
-    elif current == WorkoutSession.confirming:
-        kb = confirm_save_kb()
-    else:
-        await call.answer()
-        return
-    await call.message.edit_reply_markup(reply_markup=kb)
+    # двойное нажатие No: шаг уже вернули, Telegram ответит «not modified»
+    with suppress(TelegramBadRequest):
+        if current == WorkoutSession.active:
+            await send_workout_main(call, state)
+        elif current in (WorkoutSession.finishing, WorkoutSession.entering_date):
+            await state.set_state(WorkoutSession.finishing)
+            await call.message.edit_text(DATE_PROMPT, reply_markup=finish_date_kb())
+        elif current == WorkoutSession.entering_notes:
+            await call.message.edit_text(NOTES_PROMPT, reply_markup=finish_notes_kb())
+        elif current == WorkoutSession.confirming:
+            await call.message.edit_text(
+                format_confirm(await state.get_data()),
+                parse_mode="HTML",
+                reply_markup=confirm_save_kb(),
+            )
     await call.answer()
