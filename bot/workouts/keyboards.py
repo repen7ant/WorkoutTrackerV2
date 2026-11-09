@@ -2,6 +2,8 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.common.keyboards import yes_no_kb
+
 
 class ExerciseChoice(CallbackData, prefix="wk_ex"):
     # только id: у callback_data лимит 64 байта, и название на кириллице
@@ -69,8 +71,9 @@ def confirm_save_kb() -> InlineKeyboardMarkup:
 
 
 def cancel_confirm_kb() -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Yes, cancel workout", callback_data="wk_cancel_confirm")
-    builder.button(text="No, go back", callback_data="wk_cancel_abort")
-    builder.adjust(1)
-    return builder.as_markup()
+    return yes_no_kb("wk_cancel_confirm", "wk_cancel_abort")
+
+
+def finish_confirm_kb() -> InlineKeyboardMarkup:
+    # No — как у отмены: cb_cancel_abort вернёт кнопки окна тренировки
+    return yes_no_kb("wk_finish_confirm", "wk_cancel_abort")

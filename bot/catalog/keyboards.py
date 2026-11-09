@@ -2,6 +2,8 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.common.keyboards import yes_no_kb
+
 
 class ExercisePage(CallbackData, prefix="ex_page"):
     page: int
@@ -67,14 +69,9 @@ def delete_exercises_kb(exercises: list) -> InlineKeyboardMarkup:
 
 
 def delete_confirm_kb(exercise_id: int) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(
-        text="Yes, delete",
-        callback_data=ExerciseDeleteConfirm(exercise_id=exercise_id).pack(),
+    return yes_no_kb(
+        ExerciseDeleteConfirm(exercise_id=exercise_id).pack(), "ex_delete_cancel"
     )
-    builder.button(text="Cancel", callback_data="ex_delete_cancel")
-    builder.adjust(2)
-    return builder.as_markup()
 
 
 def search_result_kb() -> InlineKeyboardMarkup:
