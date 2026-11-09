@@ -1,6 +1,7 @@
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum, auto
+from typing import Any
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -11,9 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.common.formatting import format_workout_time
 from bot.users.models import User
-from bot.users.settings import local_now
 from bot.workouts.domain import InvalidWorkout
-from bot.workouts.draft import build_record, utc_now_iso
+from bot.workouts.draft import build_record, utc_now_iso, workout_today
 from bot.workouts.formatters import format_confirm
 from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_main
 from bot.workouts.keyboards import (
@@ -41,8 +41,8 @@ class Step(Enum):
     SAVE = auto()
 
 
-def _today(user: User) -> str:
-    return local_now(user.utc_offset).date().isoformat()
+def _today(user: User, data: dict[str, Any]) -> str:
+    return workout_today(data, user.utc_offset, datetime.now(UTC)).isoformat()
 
 
 def step_after_finish(ask_date: bool, ask_notes: bool) -> Step:
@@ -133,7 +133,9 @@ async def cb_finish(call: CallbackQuery, state: FSMContext, db_user: User) -> No
             await remove_kb(call)
             await call.message.answer(DATE_PROMPT, reply_markup=finish_date_kb())
         case Step.NOTES:
-            await state.update_data(workout_date=_today(db_user))
+            await state.update_data(
+                workout_date=_today(db_user, await state.get_data())
+            )
             await remove_kb(call)
             await _ask_notes(call.message, state)
         case Step.YES_NO:
@@ -148,7 +150,9 @@ async def cb_finish(call: CallbackQuery, state: FSMContext, db_user: User) -> No
 async def cb_finish_confirm(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await state.update_data(workout_date=_today(db_user), notes=None)
+    await state.update_data(
+        workout_date=_today(db_user, await state.get_data()), notes=None
+    )
     await _save(call, state, session, db_user, restore_kb=workout_main_kb())
 
 
@@ -181,7 +185,7 @@ async def cb_back_to_date(
 async def cb_date_today(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await state.update_data(workout_date=_today(db_user))
+    await state.update_data(workout_date=_today(db_user, await state.get_data()))
     match step_after_date(db_user.ask_workout_notes, typed=False):
         case Step.NOTES:
             await remove_kb(call)

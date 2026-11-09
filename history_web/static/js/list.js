@@ -26,7 +26,8 @@ function workoutRow(w) {
   },
   el("span", { className: "day", textContent: date.getDate() }),
   text,
-  ...(w.duration_minutes === null
+  // == null: у ответа старого сервера (откат образа) ключа нет совсем
+  ...(w.duration_minutes == null
     ? []
     : [el("span", { className: "row-duration", textContent: formatDuration(w.duration_minutes) })]),
   el("span", { className: "chevron", textContent: "›" }),

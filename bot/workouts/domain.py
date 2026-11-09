@@ -7,7 +7,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 # Границы берутся из схемы (models.Set): вес — Numeric(5, 2), повторения и
@@ -20,6 +20,8 @@ MAX_SECONDS = 32767
 # заметки упражнения идут в лог из 10 тренировок, а сообщение Telegram —
 # не длиннее 4096 символов
 MAX_EXERCISE_NOTES = 200
+# дольше — скорее всего, тренировку забыли закончить или ошиблись в правке
+MAX_WORKOUT_DURATION = timedelta(hours=6)
 
 
 class InvalidWorkout(ValueError):
@@ -137,6 +139,10 @@ class WorkoutRecord:
             raise InvalidWorkout("workout must have at least one exercise")
         if (start_time is None) != (end_time is None):
             raise InvalidWorkout("start and end time must be set together")
+        if start_time is not None and end_time is not None:
+            duration = timedelta(minutes=duration_minutes(start_time, end_time))
+            if duration > MAX_WORKOUT_DURATION:
+                raise InvalidWorkout("workout can't be longer than 6 hours")
         notes = notes.strip() if notes else None
         return cls(
             user_id=user_id,

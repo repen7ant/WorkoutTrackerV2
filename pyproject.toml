@@ -39,7 +39,10 @@ select = [
     "S",      # bandit
     "ASYNC",  # корректность async — весь проект на нём
     "RUF",
+    "DTZ002", # datetime.today()
+    "DTZ003", # datetime.utcnow()
     "DTZ005", # datetime.now() без пояса
+    "DTZ006", # datetime.fromtimestamp() без пояса
     "DTZ011", # date.today()
 ]
 ignore = [

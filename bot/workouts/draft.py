@@ -14,10 +14,12 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from bot.users.settings import to_local
-from bot.workouts.domain import ExerciseEntry, SetEntry, WorkoutRecord
-
-# дольше — скорее всего, тренировку забыли закончить
-MAX_WORKOUT_DURATION = timedelta(hours=6)
+from bot.workouts.domain import (
+    MAX_WORKOUT_DURATION,
+    ExerciseEntry,
+    SetEntry,
+    WorkoutRecord,
+)
 
 
 def utc_now_iso() -> str:
@@ -84,3 +86,13 @@ def minutes_since_start(data: dict[str, Any], now: datetime) -> int | None:
         return None
     elapsed = now - datetime.fromisoformat(data["started_at"])
     return max(0, int(elapsed.total_seconds() // 60))
+
+
+def workout_today(data: dict[str, Any], utc_offset: int, now: datetime) -> date:
+    """
+    «Сегодня» для тренировки — день нажатия Finish session по часам
+    пользователя: Today или Yes могут нажать уже после полуночи.
+    """
+    finished_at = data.get("finished_at")
+    moment = datetime.fromisoformat(finished_at) if finished_at else now
+    return to_local(moment, utc_offset).date()

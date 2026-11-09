@@ -154,12 +154,15 @@ def test_timezone_kb():
     assert rows[-1] == [("Back", "settings_back")]
     times = [button for row in rows[:-1] for button in row]
     labels = [text for text, _ in times]
-    assert len(times) == 31
+    assert len(times) == 33
     assert labels == sorted(set(labels))  # по времени суток, без повторов
     assert all(len(row) == 4 for row in rows[:-2])
     assert ("18:05", change(Setting.TIMEZONE, 180)) in times
     assert ("20:35", change(Setting.TIMEZONE, 330)) in times
     assert ("05:05", change(Setting.TIMEZONE, -600)) in times
+    # летнее время Аделаиды и Ньюфаундленда
+    assert ("01:35", change(Setting.TIMEZONE, 630)) in times
+    assert ("12:35", change(Setting.TIMEZONE, -150)) in times
 
 
 def test_timezone_saved():

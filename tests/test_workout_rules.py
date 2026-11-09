@@ -23,6 +23,7 @@ from bot.workouts.draft import (
     sets_from_fsm,
     utc_now_iso,
     workout_times,
+    workout_today,
 )
 from bot.workouts.handlers.recording import is_note, parse_set
 from bot.workouts.service import check_deleted_entries
@@ -316,6 +317,41 @@ def test_workout_time_needs_both_ends():
     bench = ExerciseEntry.create(7, [SetEntry.create(None, 5)])
     with pytest.raises(InvalidWorkout):
         WorkoutRecord.create(1, date(2026, 1, 1), None, [bench], start_time=time(18, 5))
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (time(18, 0), time(0, 1)),  # 6 ч 1 мин
+        (time(19, 20), time(18, 5)),  # конец раньше начала — почти сутки
+    ],
+)
+def test_workout_longer_than_6_hours_rejected(start, end):
+    bench = ExerciseEntry.create(7, [SetEntry.create(None, 5)])
+    with pytest.raises(InvalidWorkout):
+        WorkoutRecord.create(
+            1, date(2026, 1, 1), None, [bench], start_time=start, end_time=end
+        )
+
+
+def test_workout_of_6_hours_accepted():
+    bench = ExerciseEntry.create(7, [SetEntry.create(None, 5)])
+    record = WorkoutRecord.create(
+        1, date(2026, 1, 1), None, [bench], start_time=time(18, 0), end_time=time(0, 0)
+    )
+    assert record.end_time == time(0, 0)
+
+
+def test_today_is_the_day_finish_was_pressed():
+    """Finish в 23:59, Today — уже после полуночи: дата — день тренировки."""
+    data = {"finished_at": "2026-11-09T20:59:30+00:00"}  # 23:59:30 по Москве
+    now = datetime(2026, 11, 9, 21, 0, 30, tzinfo=UTC)  # 00:00:30, уже 10-е
+    assert workout_today(data, 180, now) == date(2026, 11, 9)
+
+
+def test_today_without_finish_is_now():
+    now = datetime(2026, 11, 9, 21, 0, 30, tzinfo=UTC)
+    assert workout_today({}, 180, now) == date(2026, 11, 10)
 
 
 def test_build_record_takes_workout_time():
