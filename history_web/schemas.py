@@ -1,6 +1,7 @@
 """Доменные объекты тренировок ↔ JSON для страницы."""
 
-from datetime import date
+import re
+from datetime import date, time
 from decimal import Decimal
 from typing import Any
 
@@ -10,12 +11,19 @@ from bot.workouts.domain import (
     LoggedWorkout,
     SetEntry,
     WorkoutRecord,
+    duration_minutes,
 )
 from history_web.progress import Progress
+
+_HH_MM = re.compile(r"\d{2}:\d{2}")
 
 
 def _number(value: Decimal | int | None) -> float | int | None:
     return float(value) if isinstance(value, Decimal) else value
+
+
+def _time_to_json(value: time | None) -> str | None:
+    return None if value is None else f"{value:%H:%M}"
 
 
 def set_to_json(s: SetEntry) -> dict[str, Any]:
@@ -23,7 +31,17 @@ def set_to_json(s: SetEntry) -> dict[str, Any]:
 
 
 def workout_summary_to_json(w: LoggedWorkout) -> dict[str, Any]:
-    return {"id": w.id, "date": w.date.isoformat(), "notes": w.notes}
+    duration = None
+    if w.start_time is not None and w.end_time is not None:
+        duration = duration_minutes(w.start_time, w.end_time)
+    return {
+        "id": w.id,
+        "date": w.date.isoformat(),
+        "notes": w.notes,
+        "start_time": _time_to_json(w.start_time),
+        "end_time": _time_to_json(w.end_time),
+        "duration_minutes": duration,
+    }
 
 
 def workout_to_json(w: LoggedWorkout) -> dict[str, Any]:
@@ -120,9 +138,27 @@ def record_from_json(user_id: int, body: Any) -> WorkoutRecord:
         raise InvalidWorkout("notes must be a string")
     if not isinstance(body.get("exercises"), list):
         raise InvalidWorkout("exercises must be a list")
+    exercises = [_exercise_from_json(ex) for ex in body["exercises"]]
+    # как с заметками упражнений: старая страница из кэша, которая не знает
+    # о времени, без этой проверки молча стёрла бы его
+    if "start_time" not in body or "end_time" not in body:
+        raise InvalidWorkout("workout time is missing, reopen the app")
     return WorkoutRecord.create(
         user_id,
         workout_date,
         notes,
-        [_exercise_from_json(ex) for ex in body["exercises"]],
+        exercises,
+        start_time=_time_from_json(body["start_time"], "start_time"),
+        end_time=_time_from_json(body["end_time"], "end_time"),
     )
+
+
+def _time_from_json(value: Any, field: str) -> time | None:
+    if value is None:
+        return None
+    if not (isinstance(value, str) and _HH_MM.fullmatch(value)):
+        raise InvalidWorkout(f"{field} must be HH:MM")
+    try:
+        return time.fromisoformat(value)
+    except ValueError as e:  # 25:00
+        raise InvalidWorkout(f"{field} must be HH:MM") from e

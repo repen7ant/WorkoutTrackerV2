@@ -6,7 +6,7 @@
 
 import asyncio
 import sys
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -58,7 +58,17 @@ def build_workout(user_id: int, day: date, i: int, ids: dict[str, int]):
         ),
     ]
     notes = f"week {i // 3 + 1}" if day.weekday() == 0 else None
-    return WorkoutRecord.create(user_id, day, notes, exercises)
+    # каждая пятая — без времени, как записанные до него
+    if i % 5 == 4:
+        return WorkoutRecord.create(user_id, day, notes, exercises)
+    return WorkoutRecord.create(
+        user_id,
+        day,
+        notes,
+        exercises,
+        start_time=time(18, 15 * (i % 4)),
+        end_time=time(19, 10 * (i % 5)),
+    )
 
 
 async def seed(user_id: int) -> None:

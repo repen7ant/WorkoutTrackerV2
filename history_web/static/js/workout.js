@@ -1,7 +1,7 @@
 import { api } from "./api.js";
 import { el, show } from "./dom.js";
 import { showEdit } from "./edit.js";
-import { formatLongDate, formatSet } from "./format.js";
+import { formatDuration, formatLongDate, formatSet } from "./format.js";
 import { resetList, showList } from "./list.js";
 import { confirmAction } from "./telegram.js";
 
@@ -13,6 +13,10 @@ export function renderWorkout(w) {
   const head = el("div", { className: "workout-head" },
     el("h2", { textContent: formatLongDate(w.date) }),
   );
+  if (w.start_time) {
+    const time = `${w.start_time}–${w.end_time} · ${formatDuration(w.duration_minutes)}`;
+    head.append(el("p", { className: "workout-time", textContent: time }));
+  }
   if (w.notes) head.append(el("p", { className: "notes", textContent: w.notes }));
   const exercises = w.exercises.map((ex) => el("section", { className: "section" },
     el("h3", { textContent: ex.name }),

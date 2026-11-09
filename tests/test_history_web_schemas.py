@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 import pytest
@@ -10,7 +10,11 @@ from bot.workouts.domain import (
     LoggedWorkout,
     SetEntry,
 )
-from history_web.schemas import record_from_json, workout_to_json
+from history_web.schemas import (
+    record_from_json,
+    workout_summary_to_json,
+    workout_to_json,
+)
 
 
 def test_workout_to_json():
@@ -29,6 +33,9 @@ def test_workout_to_json():
         "id": 42,
         "date": "2026-10-30",
         "notes": "week 3",
+        "start_time": None,
+        "end_time": None,
+        "duration_minutes": None,
         "exercises": [
             {
                 "exercise_id": 7,
@@ -46,10 +53,26 @@ def test_workout_to_json():
     }
 
 
+def test_workout_time_to_json():
+    w = LoggedWorkout(
+        42, date(2026, 10, 30), None, [], start_time=time(23, 30), end_time=time(0, 45)
+    )
+    assert workout_summary_to_json(w) == {
+        "id": 42,
+        "date": "2026-10-30",
+        "notes": None,
+        "start_time": "23:30",
+        "end_time": "00:45",
+        "duration_minutes": 75,
+    }
+
+
 def test_record_from_json_builds_record():
     body = {
         "date": "2026-10-30",
         "notes": " week 3 ",
+        "start_time": None,
+        "end_time": None,
         "exercises": [
             {
                 "exercise_id": 7,
@@ -71,13 +94,43 @@ def test_record_from_json_builds_record():
     )
     assert r.exercises[1].notes is None
     assert (r.exercises[1].exercise_id, r.exercises[1].name) == (None, "Old custom")
+    assert (r.start_time, r.end_time) == (None, None)
 
 
 GOOD_SET = {"weight": None, "reps": 5, "seconds": None}
 
 
 def body_with(exercise):
-    return {"date": "2026-10-30", "exercises": [{"notes": None, **exercise}]}
+    return {
+        "date": "2026-10-30",
+        "start_time": None,
+        "end_time": None,
+        "exercises": [{"notes": None, **exercise}],
+    }
+
+
+def timed(start, end):
+    body = body_with({"exercise_id": 7, "sets": [GOOD_SET]})
+    return body | {"start_time": start, "end_time": end}
+
+
+def test_record_from_json_takes_time():
+    r = record_from_json(1, timed("18:05", "19:20"))
+    assert (r.start_time, r.end_time) == (time(18, 5), time(19, 20))
+
+
+TIME_REJECTS = [
+    # старая страница из кэша: нет времени тренировки
+    {
+        "date": "2026-10-30",
+        "exercises": [{"exercise_id": 7, "notes": None, "sets": [GOOD_SET]}],
+    },
+    timed("18:05", None),
+    timed("18:5", "19:20"),
+    timed("25:00", "19:20"),
+    timed("18:05:00", "19:20"),
+    timed(1805, "19:20"),
+]
 
 
 @pytest.mark.parametrize(
@@ -87,7 +140,7 @@ def body_with(exercise):
         {"exercises": [{"exercise_id": 7, "sets": [GOOD_SET]}]},
         {"date": "30-10-2026", "exercises": [{"exercise_id": 7, "sets": [GOOD_SET]}]},
         {"date": "2026-10-30", "notes": 5, "exercises": []},
-        {"date": "2026-10-30", "exercises": []},
+        {"date": "2026-10-30", "start_time": None, "end_time": None, "exercises": []},
         {"date": "2026-10-30", "exercises": {}},
         body_with({"exercise_id": 7, "sets": []}),
         body_with({"exercise_id": "7", "sets": [GOOD_SET]}),
@@ -102,6 +155,7 @@ def body_with(exercise):
         {"date": "2026-10-30", "exercises": [{"exercise_id": 7, "sets": [GOOD_SET]}]},
         body_with({"exercise_id": 7, "sets": [GOOD_SET], "notes": 5}),
         body_with({"exercise_id": 7, "sets": [GOOD_SET], "notes": "x" * 201}),
+        *TIME_REJECTS,
     ],
 )
 def test_record_from_json_rejects(body):

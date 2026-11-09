@@ -7,6 +7,12 @@
   font-size: 22px;
 }
 
+.workout-time {
+  margin: 4px 0 0;
+  color: var(--hint);
+  font-variant-numeric: tabular-nums;
+}
+
 .notes {
   margin: 4px 0 0;
   color: var(--hint);
@@ -44,6 +50,20 @@ section.section .exercise-head {
 section.section .exercise-head h3 {
   flex: 1;
   margin: 0;
+}
+
+.time-fields {
+  display: flex;
+  gap: 12px;
+}
+
+.time-fields > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.time-fields input {
+  width: 100%;
 }
 
 .set {

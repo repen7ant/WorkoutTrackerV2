@@ -13,6 +13,13 @@ export function formatShortDate(iso) {
   return parseDate(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+export function formatDuration(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (!hours) return `${mins} min`;
+  return mins ? `${hours} h ${mins} min` : `${hours} h`;
+}
+
 export function formatSet(set) {
   const weight = set.weight === null ? "BW" : `${set.weight}kg`;
   if (set.seconds === null) return `${weight} x ${set.reps}`;

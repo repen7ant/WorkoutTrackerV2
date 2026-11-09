@@ -47,7 +47,12 @@ class WorkoutRepository:
         result = await self.session.execute(
             update(Workout)
             .where(Workout.id == workout_id, Workout.user_id == record.user_id)
-            .values(date=record.date, notes=record.notes)
+            .values(
+                date=record.date,
+                notes=record.notes,
+                start_time=record.start_time,
+                end_time=record.end_time,
+            )
         )
         if result.rowcount == 0:
             return False

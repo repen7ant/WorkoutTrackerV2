@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { el, setTab, show } from "./dom.js";
-import { parseDate } from "./format.js";
+import { formatDuration, parseDate } from "./format.js";
 import { showWorkout } from "./workout.js";
 
 let listView = null;
@@ -26,6 +26,9 @@ function workoutRow(w) {
   },
   el("span", { className: "day", textContent: date.getDate() }),
   text,
+  ...(w.duration_minutes === null
+    ? []
+    : [el("span", { className: "row-duration", textContent: formatDuration(w.duration_minutes) })]),
   el("span", { className: "chevron", textContent: "›" }),
   );
 }

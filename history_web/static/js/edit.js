@@ -18,6 +18,8 @@ export function showEdit(workout) {
   // черновик со строками из полей: разбираем только при сохранении
   const draft = {
     date: workout.date,
+    start_time: workout.start_time || "",
+    end_time: workout.end_time || "",
     notes: workout.notes || "",
     exercises: workout.exercises.map((ex) => ({
       exercise_id: ex.exercise_id,
@@ -118,8 +120,13 @@ export function showEdit(workout) {
   }
 
   function buildBody() {
+    if (Boolean(draft.start_time) !== Boolean(draft.end_time)) {
+      throw new Error("Enter both start and end or neither.");
+    }
     return {
       date: draft.date,
+      start_time: draft.start_time || null,
+      end_time: draft.end_time || null,
       notes: draft.notes,
       exercises: draft.exercises.map((ex) => ({
         exercise_id: ex.exercise_id,
@@ -166,6 +173,16 @@ export function showEdit(workout) {
       el("section", { className: "section" },
         el("label", { textContent: "Date" }),
         input({ type: "date", value: draft.date }, (v) => { draft.date = v; }),
+        el("div", { className: "time-fields" },
+          el("div", {},
+            el("label", { textContent: "Start" }),
+            input({ type: "time", value: draft.start_time }, (v) => { draft.start_time = v; }),
+          ),
+          el("div", {},
+            el("label", { textContent: "End" }),
+            input({ type: "time", value: draft.end_time }, (v) => { draft.end_time = v; }),
+          ),
+        ),
         el("label", { textContent: "Notes" }),
         el("textarea", { value: draft.notes, rows: 2, oninput: (e) => { draft.notes = e.target.value; } }),
       ),
