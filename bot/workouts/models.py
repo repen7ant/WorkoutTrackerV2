@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -9,6 +9,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    Time,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,10 +22,19 @@ class Workout(Base):
     """
 
     __tablename__ = "workouts"
+    __table_args__ = (
+        CheckConstraint(
+            "(start_time IS NULL) = (end_time IS NULL)",
+            name="workouts_time_both_or_none_check",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[date] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # по часам пользователя, до минуты
+    start_time: Mapped[time | None] = mapped_column(Time)
+    end_time: Mapped[time | None] = mapped_column(Time)
 
 
 class WorkoutExercise(Base):

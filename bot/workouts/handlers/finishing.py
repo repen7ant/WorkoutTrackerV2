@@ -9,10 +9,11 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.common.formatting import format_workout_time
 from bot.users.models import User
 from bot.users.settings import local_now
 from bot.workouts.domain import InvalidWorkout
-from bot.workouts.draft import build_record
+from bot.workouts.draft import build_record, utc_now_iso
 from bot.workouts.formatters import format_confirm
 from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_main
 from bot.workouts.keyboards import (
@@ -76,7 +77,7 @@ async def _save(
     call: CallbackQuery,
     state: FSMContext,
     session: AsyncSession,
-    user_id: int,
+    user: User,
     restore_kb: InlineKeyboardMarkup,
 ) -> None:
     try:
@@ -87,7 +88,7 @@ async def _save(
         await call.answer()
         return
     try:
-        record = build_record(user_id, await state.get_data())
+        record = build_record(user.id, await state.get_data(), user.utc_offset)
         await record_workout(session, record)
     except ExerciseNotAvailable:
         await _restore_kb(call, restore_kb)
@@ -108,7 +109,8 @@ async def _save(
         await _restore_kb(call, restore_kb)
         raise
     await state.clear()
-    await call.message.answer(f"Workout saved ({record.date:%d-%m-%y}).")
+    when = format_workout_time(record.start_time, record.end_time)
+    await call.message.answer(f"Workout saved: {record.date:%d-%m-%y}{when}.")
     await call.answer()
 
 
@@ -124,6 +126,7 @@ async def cb_finish(call: CallbackQuery, state: FSMContext, db_user: User) -> No
     if not data.get("exercises"):
         await call.answer("Add at least one exercise first.", show_alert=True)
         return
+    await state.update_data(finished_at=utc_now_iso())
     match step_after_finish(db_user.ask_workout_date, db_user.ask_workout_notes):
         case Step.DATE:
             await state.set_state(WorkoutSession.finishing)
@@ -146,7 +149,7 @@ async def cb_finish_confirm(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     await state.update_data(workout_date=_today(db_user), notes=None)
-    await _save(call, state, session, db_user.id, restore_kb=workout_main_kb())
+    await _save(call, state, session, db_user, restore_kb=workout_main_kb())
 
 
 # назад в основное окно тренировки
@@ -186,7 +189,7 @@ async def cb_date_today(
             await call.answer()
         case Step.SAVE:
             await state.update_data(notes=None)
-            await _save(call, state, session, db_user.id, restore_kb=finish_date_kb())
+            await _save(call, state, session, db_user, restore_kb=finish_date_kb())
 
 
 # дата — ввести вручную
@@ -244,7 +247,7 @@ async def enter_notes(message: Message, state: FSMContext) -> None:
 async def cb_save(
     call: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
-    await _save(call, state, session, db_user.id, restore_kb=confirm_save_kb())
+    await _save(call, state, session, db_user, restore_kb=confirm_save_kb())
 
 
 # edit notes — назад к вводу заметок

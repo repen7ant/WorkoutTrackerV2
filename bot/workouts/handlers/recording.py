@@ -19,7 +19,7 @@ from bot.workouts.domain import (
     SetEntry,
     exercise_notes,
 )
-from bot.workouts.draft import set_to_fsm, sets_from_fsm
+from bot.workouts.draft import set_to_fsm, sets_from_fsm, utc_now_iso
 from bot.workouts.formatters import (
     format_current_sets,
     format_exercise_log,
@@ -95,7 +95,7 @@ async def cmd_workout(message: Message, state: FSMContext) -> None:
         )
         return
     await state.set_state(WorkoutSession.active)
-    await state.update_data(exercises=[])
+    await state.update_data(exercises=[], started_at=utc_now_iso())
     await send_workout_main(message, state)
 
 

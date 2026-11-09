@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 import pytest
@@ -13,9 +13,16 @@ from bot.workouts.domain import (
     LoggedWorkout,
     SetEntry,
     WorkoutRecord,
+    duration_minutes,
     exercise_notes,
 )
-from bot.workouts.draft import build_record, set_to_fsm, sets_from_fsm
+from bot.workouts.draft import (
+    build_record,
+    set_to_fsm,
+    sets_from_fsm,
+    utc_now_iso,
+    workout_times,
+)
 from bot.workouts.handlers.recording import is_note, parse_set
 from bot.workouts.service import check_deleted_entries
 
@@ -127,7 +134,7 @@ def test_build_record_revalidates_fsm_data():
         ],
     }
     with pytest.raises(InvalidWorkout):
-        build_record(1, data)
+        build_record(1, data, 180)
 
 
 def _draft(sets: list[dict]) -> dict:
@@ -141,14 +148,14 @@ def test_timed_set_survives_fsm_draft():
     entry = SetEntry.create(None, seconds=90)
     sets = fsm_json.loads(fsm_json.dumps([set_to_fsm(entry)]))
     assert sets_from_fsm(sets) == [entry]
-    assert build_record(1, _draft(sets)).exercises[0].sets == (entry,)
+    assert build_record(1, _draft(sets), 180).exercises[0].sets == (entry,)
 
 
 def test_drafts_started_before_timed_sets_still_load():
     """В подходах черновиков, начатых до обновления, нет ключа seconds."""
     sets = [{"weight": None, "reps": 10}]
     assert sets_from_fsm(sets) == [SetEntry(None, 10)]
-    assert build_record(1, _draft(sets)).exercises[0].sets == (SetEntry(None, 10),)
+    assert build_record(1, _draft(sets), 180).exercises[0].sets == (SetEntry(None, 10),)
 
 
 def test_deleted_entry_keeps_name():
@@ -228,12 +235,12 @@ def test_entry_rejects_long_notes():
 def test_build_record_keeps_exercise_notes():
     data = _draft([{"weight": None, "reps": 10}])
     data["exercises"][0]["notes"] = "no bench"
-    assert build_record(1, data).exercises[0].notes == "no bench"
+    assert build_record(1, data, 180).exercises[0].notes == "no bench"
 
 
 def test_drafts_started_before_notes_still_load():
     """У упражнений в черновиках, начатых до обновления, нет ключа notes."""
-    record = build_record(1, _draft([{"weight": None, "reps": 10}]))
+    record = build_record(1, _draft([{"weight": None, "reps": 10}]), 180)
     assert record.exercises[0].notes is None
 
 
@@ -259,3 +266,63 @@ def test_drafts_started_before_notes_still_load():
 )
 def test_is_note(text, expected):
     assert is_note(text) is expected
+
+
+def _timed(
+    started="2026-11-09T15:05:40+00:00",
+    finished="2026-11-09T16:20:10+00:00",
+    day="2026-11-09",
+):
+    return {"started_at": started, "finished_at": finished, "workout_date": day}
+
+
+NIGHT = ("2026-11-09T20:30:00+00:00", "2026-11-09T21:45:00+00:00")
+
+
+@pytest.mark.parametrize(
+    ("data", "offset", "expected"),
+    [
+        (_timed(), 180, (time(18, 5), time(19, 20))),  # секунды отброшены
+        (_timed(), -600, (time(5, 5), time(6, 20))),
+        # 23:30–00:45 по Москве: подходит и день начала, и день конца
+        (_timed(*NIGHT, "2026-11-09"), 180, (time(23, 30), time(0, 45))),
+        (_timed(*NIGHT, "2026-11-10"), 180, (time(23, 30), time(0, 45))),
+        (_timed(day="2026-11-01"), 180, None),  # дату ввели вручную
+        (_timed(finished="2026-11-09T21:06:00+00:00"), 180, None),  # дольше 6 ч
+        (_timed(finished="2026-11-09T15:00:00+00:00"), 180, None),  # конец раньше
+        # черновик, начатый до обновления
+        ({"workout_date": "2026-11-09", "finished_at": NIGHT[1]}, 180, None),
+        ({"workout_date": "2026-11-09", "started_at": NIGHT[0]}, 180, None),
+    ],
+)
+def test_workout_times(data, offset, expected):
+    assert workout_times(data, offset) == expected
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "minutes"),
+    [
+        (time(18, 5), time(19, 20), 75),
+        (time(23, 30), time(0, 45), 75),
+        (time(18, 5), time(18, 5), 0),
+    ],
+)
+def test_duration_minutes(start, end, minutes):
+    assert duration_minutes(start, end) == minutes
+
+
+def test_workout_time_needs_both_ends():
+    bench = ExerciseEntry.create(7, [SetEntry.create(None, 5)])
+    with pytest.raises(InvalidWorkout):
+        WorkoutRecord.create(1, date(2026, 1, 1), None, [bench], start_time=time(18, 5))
+
+
+def test_build_record_takes_workout_time():
+    data = _draft([{"weight": None, "reps": 10}]) | _timed()
+    record = build_record(1, data, 180)
+    assert (record.start_time, record.end_time) == (time(18, 5), time(19, 20))
+
+
+def test_draft_moments_survive_redis():
+    data = {"started_at": utc_now_iso()}
+    assert fsm_json.loads(fsm_json.dumps(data)) == data

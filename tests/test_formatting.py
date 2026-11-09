@@ -1,9 +1,15 @@
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
+
+import pytest
 
 from bot.catalog.formatters import format_exercise_list
 from bot.catalog.models import Exercise, Muscle
-from bot.common.formatting import format_set_lines
+from bot.common.formatting import (
+    format_duration,
+    format_set_lines,
+    format_workout_time,
+)
 from bot.export.prompt import build_ai_prompt
 from bot.export.service import ExportExercise, ExportWorkout
 from bot.history.formatters import format_workout_detail
@@ -180,3 +186,18 @@ def test_sets_prompt_without_name():
 
 def test_sets_prompt_starts_with_escaped_name():
     assert format_sets_prompt(NASTY) == f"<b>{SAFE}</b>\n\n{SETS_PROMPT}"
+
+
+@pytest.mark.parametrize(
+    ("minutes", "text"),
+    [(0, "0 min"), (45, "45 min"), (60, "1 h"), (75, "1 h 15 min"), (600, "10 h")],
+)
+def test_format_duration(minutes, text):
+    assert format_duration(minutes) == text
+
+
+def test_format_workout_time():
+    assert format_workout_time(time(23, 30), time(0, 45)) == (
+        " · 23:30–00:45 (1 h 15 min)"
+    )
+    assert format_workout_time(None, None) == ""

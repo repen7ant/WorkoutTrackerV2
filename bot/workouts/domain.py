@@ -7,7 +7,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 # Границы берутся из схемы (models.Set): вес — Numeric(5, 2), повторения и
@@ -119,6 +119,9 @@ class WorkoutRecord:
     date: date
     notes: str | None
     exercises: tuple[ExerciseEntry, ...]
+    # по часам пользователя; оба или ни одного
+    start_time: time | None = None
+    end_time: time | None = None
 
     @classmethod
     def create(
@@ -127,15 +130,21 @@ class WorkoutRecord:
         workout_date: date,
         notes: str | None,
         exercises: list[ExerciseEntry],
+        start_time: time | None = None,
+        end_time: time | None = None,
     ) -> "WorkoutRecord":
         if not exercises:
             raise InvalidWorkout("workout must have at least one exercise")
+        if (start_time is None) != (end_time is None):
+            raise InvalidWorkout("start and end time must be set together")
         notes = notes.strip() if notes else None
         return cls(
             user_id=user_id,
             date=workout_date,
             notes=notes or None,
             exercises=tuple(exercises),
+            start_time=start_time,
+            end_time=end_time,
         )
 
     def positioned(self) -> list[tuple[int, ExerciseEntry]]:
@@ -159,3 +168,11 @@ class LoggedWorkout:
     date: date
     notes: str | None
     exercises: list[LoggedExercise]
+    start_time: time | None = None
+    end_time: time | None = None
+
+
+def duration_minutes(start: time, end: time) -> int:
+    """Через полночь тоже: 23:30–00:45 — 75 минут."""
+    minutes = (end.hour - start.hour) * 60 + end.minute - start.minute
+    return minutes % (24 * 60)

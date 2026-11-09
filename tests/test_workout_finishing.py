@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 
 import pytest
 from aiogram.exceptions import TelegramBadRequest
@@ -158,3 +159,18 @@ def test_losing_tap_of_double_save_is_silent():
     state = make_state(WorkoutSession.active)
     asyncio.run(finishing.cb_finish_confirm(call, state, None, user))
     assert call.answered
+
+
+def test_finish_records_end_time():
+    msg = FakeMessage(format_workout_main(DRAFT["exercises"]), workout_main_kb())
+    user = User(
+        id=1,
+        ask_workout_date=False,
+        ask_workout_notes=False,
+        exercise_log_size=10,
+        utc_offset=180,
+    )
+    state = make_state(WorkoutSession.active)
+    asyncio.run(finishing.cb_finish(FakeCall(msg), state, user))
+    finished_at = asyncio.run(state.get_data())["finished_at"]
+    assert datetime.fromisoformat(finished_at).tzinfo is not None

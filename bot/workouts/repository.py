@@ -28,7 +28,13 @@ class WorkoutRepository:
     async def add(self, record: WorkoutRecord, names: dict[int, str]) -> int:
         """names — названия упражнений по id: они сохраняются вместе с
         тренировкой и переживают удаление упражнения из каталога."""
-        workout = Workout(user_id=record.user_id, date=record.date, notes=record.notes)
+        workout = Workout(
+            user_id=record.user_id,
+            date=record.date,
+            notes=record.notes,
+            start_time=record.start_time,
+            end_time=record.end_time,
+        )
         self.session.add(workout)
         await self.session.flush()
         await self._insert_exercises(workout.id, record, names)
@@ -121,7 +127,14 @@ class WorkoutRepository:
             .limit(per_page)
         )
         workouts = [
-            LoggedWorkout(id=w.id, date=w.date, notes=w.notes, exercises=[])
+            LoggedWorkout(
+                id=w.id,
+                date=w.date,
+                notes=w.notes,
+                exercises=[],
+                start_time=w.start_time,
+                end_time=w.end_time,
+            )
             for w in result.scalars().all()
         ]
         return workouts, total_pages
@@ -198,7 +211,12 @@ class WorkoutRepository:
         for workout, we, s in result.tuples().all():
             if workout.id not in workouts:
                 workouts[workout.id] = LoggedWorkout(
-                    id=workout.id, date=workout.date, notes=workout.notes, exercises=[]
+                    id=workout.id,
+                    date=workout.date,
+                    notes=workout.notes,
+                    exercises=[],
+                    start_time=workout.start_time,
+                    end_time=workout.end_time,
                 )
             if we.id not in entries:
                 entries[we.id] = LoggedExercise(
