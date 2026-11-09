@@ -232,3 +232,21 @@ docker compose -f docker-compose.prod.yaml exec bot uv run -m bot.broadcast "Т�
 ```
 
 Скрипт покажет текст и число получателей и спросит подтверждение (`y`). Тех, кто заблокировал бота или удалил аккаунт, пропускает. Текст — обычный, без форматирования, до 4096 символов; кавычки можно закрыть на следующей строке, чтобы сообщение было в несколько строк.
+
+# Откат
+
+`migrations` при каждом деплое делает `alembic upgrade head`, а старый образ не знает новых ревизий и падает (`Can't locate revision`). `alembic downgrade` не нужен — он удаляет колонки вместе с данными. Вместо него, на сервере в `~/workout-tracker`:
+
+1. Пока стоит новый образ — отметить в базе последнюю ревизию старого (`down_revision` первой новой миграции). Колонки и данные остаются:
+
+   ```bash
+   docker compose -f docker-compose.prod.yaml run --rm migrations uv run alembic stamp <ревизия>
+   ```
+
+2. Задеплоить старый образ.
+3. Когда новый образ выкатится снова, его `migrations` упадёт: колонки уже есть. Вернуть отметку и поднять сервисы:
+
+   ```bash
+   docker compose -f docker-compose.prod.yaml run --rm migrations uv run alembic stamp head
+   docker compose -f docker-compose.prod.yaml up -d
+   ```
