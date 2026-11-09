@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from typing import TypedDict
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,8 @@ class ExportExercise(TypedDict):
 
 class ExportWorkout(TypedDict):
     date: date
+    start_time: time | None
+    end_time: time | None
     notes: str | None
     exercises: list[ExportExercise]
 
@@ -43,6 +45,8 @@ async def collect_workouts(
     return [
         ExportWorkout(
             date=w.date,
+            start_time=w.start_time,
+            end_time=w.end_time,
             notes=w.notes,
             exercises=[
                 ExportExercise(

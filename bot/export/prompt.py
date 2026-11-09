@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from bot.common.formatting import format_amount
 from bot.export.service import ExportWorkout
+from bot.workouts.domain import duration_minutes
 
 
 def _format_weight_compact(weight: Decimal | None) -> str:
@@ -84,8 +85,9 @@ def build_ai_prompt(
             f"Sets logged: {total_sets}"
         ),
         "Data format:",
-        "- Each block starts with a workout date (YYYY-MM-DD). A `notes:` part is",
-        "  the athlete's own comment on that workout.",
+        "- Each block starts with a workout date (YYYY-MM-DD), then, if recorded,",
+        "  start–end time and duration in minutes. A `notes:` part is the athlete's",
+        "  own comment on that workout.",
         "- Below it, one line per exercise. `Bench Press: 100x5, 100x5, 102.5x4`",
         "  means weight in kilograms x repetitions, sets listed in the order they",
         "  were performed.",
@@ -109,6 +111,9 @@ def build_ai_prompt(
     lines.extend(["", "## DATA"])
     for workout in workouts:
         header = workout["date"].isoformat()
+        start, end = workout["start_time"], workout["end_time"]
+        if start is not None and end is not None:
+            header += f" {start:%H:%M}–{end:%H:%M} ({duration_minutes(start, end)} min)"
         if workout["notes"]:
             header += f" | notes: {_one_line(workout['notes'])}"
         lines.append(header)

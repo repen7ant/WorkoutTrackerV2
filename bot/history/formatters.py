@@ -1,9 +1,10 @@
-from bot.common.formatting import escape, format_set_lines
+from bot.common.formatting import escape, format_set_lines, format_workout_time
 from bot.workouts.domain import LoggedWorkout
 
 
 def format_workout_detail(workout: LoggedWorkout) -> str:
-    lines = [f"<b>{workout.date.strftime('%d-%m-%y')}</b>"]
+    when = format_workout_time(workout.start_time, workout.end_time)
+    lines = [f"<b>{workout.date.strftime('%d-%m-%y')}</b>{when}"]
     if workout.notes:
         lines.append(f"<i>{escape(workout.notes)}</i>")
     lines.append("")

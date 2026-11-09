@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 import pytest
@@ -18,6 +18,7 @@ from bot.workouts.domain import (
 )
 from bot.workouts.draft import (
     build_record,
+    minutes_since_start,
     set_to_fsm,
     sets_from_fsm,
     utc_now_iso,
@@ -326,3 +327,16 @@ def test_build_record_takes_workout_time():
 def test_draft_moments_survive_redis():
     data = {"started_at": utc_now_iso()}
     assert fsm_json.loads(fsm_json.dumps(data)) == data
+
+
+@pytest.mark.parametrize(
+    ("data", "minutes"),
+    [
+        ({"started_at": "2026-11-09T15:05:40+00:00"}, 44),
+        ({"started_at": "2026-11-09T15:51:00+00:00"}, 0),  # часы чуть разошлись
+        ({}, None),
+    ],
+)
+def test_minutes_since_start(data, minutes):
+    now = datetime(2026, 11, 9, 15, 50, 39, tzinfo=UTC)
+    assert minutes_since_start(data, now) == minutes

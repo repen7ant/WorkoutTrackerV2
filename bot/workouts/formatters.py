@@ -1,15 +1,22 @@
 from datetime import date
 from typing import Any
 
-from bot.common.formatting import escape, format_set_lines
+from bot.common.formatting import escape, format_duration, format_set_lines
 from bot.workouts.domain import LoggedWorkout, SetEntry
 from bot.workouts.draft import sets_from_fsm
 
 
-def format_workout_main(exercises: list[dict[str, Any]]) -> str:
+def format_workout_main(
+    exercises: list[dict[str, Any]], elapsed_minutes: int | None = None
+) -> str:
     if not exercises:
         return "Workout started. Add your first exercise."
-    lines = ["<b>Current workout:</b>\n"]
+    # у черновиков, начатых до обновления, начала нет
+    if elapsed_minutes is None:
+        title = "<b>Current workout:</b>"
+    else:
+        title = f"<b>Current workout</b> · {format_duration(elapsed_minutes)}"
+    lines = [f"{title}\n"]
     for ex in exercises:
         lines.append(f"<b>{escape(ex['exercise_name'])}</b>")
         # у черновиков, начатых до заметок к упражнениям, ключа нет

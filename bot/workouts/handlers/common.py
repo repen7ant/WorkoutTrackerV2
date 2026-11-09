@@ -1,7 +1,10 @@
+from datetime import UTC, datetime
+
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from bot.workouts.draft import minutes_since_start
 from bot.workouts.formatters import format_workout_main
 from bot.workouts.keyboards import workout_main_kb
 
@@ -12,7 +15,8 @@ BOT_COMMANDS = Command("start", "workout", "exercises", "history", "export")
 
 async def send_workout_main(target: Message | CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    text = format_workout_main(data.get("exercises", []))
+    elapsed = minutes_since_start(data, datetime.now(UTC))
+    text = format_workout_main(data.get("exercises", []), elapsed)
 
     if isinstance(target, Message):
         await target.answer(text, parse_mode="HTML", reply_markup=workout_main_kb())

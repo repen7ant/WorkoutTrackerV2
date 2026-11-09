@@ -77,3 +77,10 @@ def build_record(user_id: int, data: dict[str, Any], utc_offset: int) -> Workout
         start_time=start_time,
         end_time=end_time,
     )
+
+
+def minutes_since_start(data: dict[str, Any], now: datetime) -> int | None:
+    if "started_at" not in data:
+        return None
+    elapsed = now - datetime.fromisoformat(data["started_at"])
+    return max(0, int(elapsed.total_seconds() // 60))

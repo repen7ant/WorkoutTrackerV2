@@ -41,6 +41,8 @@ def test_timed_sets_shown_as_minutes_and_seconds():
 def test_export_shows_timed_sets():
     workout = ExportWorkout(
         date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
         notes=None,
         exercises=[
             ExportExercise(
@@ -158,6 +160,8 @@ def test_workout_detail_shows_both_notes():
 def test_export_keeps_notes_on_one_line():
     workout = ExportWorkout(
         date=date(2026, 1, 1),
+        start_time=None,
+        end_time=None,
         notes="bad\nsleep",
         exercises=[
             ExportExercise(
@@ -201,3 +205,46 @@ def test_format_workout_time():
         " · 23:30–00:45 (1 h 15 min)"
     )
     assert format_workout_time(None, None) == ""
+
+
+def test_workout_main_shows_elapsed_time():
+    exercises = [
+        {"exercise_name": "Bench Press", "sets": [{"weight": None, "reps": 5}]}
+    ]
+    assert format_workout_main(exercises, 45).startswith(
+        "<b>Current workout</b> · 45 min\n"
+    )
+    assert format_workout_main(exercises).startswith("<b>Current workout:</b>\n")
+
+
+def test_workout_detail_shows_time():
+    workout = LoggedWorkout(
+        1,
+        date(2026, 1, 1),
+        None,
+        [LoggedExercise(7, "Bench Press", [SetEntry(None, 5)])],
+        start_time=time(18, 5),
+        end_time=time(19, 20),
+    )
+    assert format_workout_detail(workout).startswith(
+        "<b>01-01-26</b> · 18:05–19:20 (1 h 15 min)\n"
+    )
+
+
+def test_export_shows_workout_time():
+    workout = ExportWorkout(
+        date=date(2026, 1, 1),
+        start_time=time(18, 5),
+        end_time=time(19, 20),
+        notes="week 3",
+        exercises=[
+            ExportExercise(
+                name="Bench Press",
+                muscles=[],
+                sets=[SetEntry.create(None, 5)],
+                notes=None,
+            )
+        ],
+    )
+    lines = build_ai_prompt([workout], "all time", None, date(2026, 1, 2)).splitlines()
+    assert "2026-01-01 18:05–19:20 (75 min) | notes: week 3" in lines
