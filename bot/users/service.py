@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.users.models import User
+from bot.users.settings import LOG_SIZES, Setting
 
 
 async def get_or_register(
@@ -18,6 +19,21 @@ async def get_or_register(
         user.username = username
         await session.commit()
     return user
+
+
+async def update_setting(
+    session: AsyncSession, user: User, setting: Setting, value: int
+) -> None:
+    match setting:
+        case Setting.DATE:
+            user.ask_workout_date = bool(value)
+        case Setting.NOTES:
+            user.ask_workout_notes = bool(value)
+        case Setting.LOG:
+            if value not in LOG_SIZES:
+                return
+            user.exercise_log_size = value
+    await session.commit()
 
 
 async def all_user_ids(session: AsyncSession) -> list[int]:

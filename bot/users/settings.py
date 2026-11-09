@@ -1,5 +1,13 @@
+from enum import StrEnum
+
 # порядок переключения в /settings; 0 — лог не показывать
 LOG_SIZES = (10, 5, 3, 0)
+
+
+class Setting(StrEnum):
+    DATE = "date"
+    NOTES = "notes"
+    LOG = "log"
 
 
 def next_log_size(size: int) -> int:

@@ -11,7 +11,8 @@ async def cmd_start(message: Message) -> None:
         "/exercises — exercises interaction\n"
         "/history — workout sessions history\n"
         "/workout — start workout session\n"
-        "/export — export log as an AI analysis prompt"
+        "/export — export log as an AI analysis prompt\n"
+        "/settings — workout preferences"
     )
 
 
