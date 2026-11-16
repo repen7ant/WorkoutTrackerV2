@@ -100,7 +100,7 @@ def _day_choice_view(
     )
     if week == program.weeks and program.weeks > 1:
         text = f"{LAST_WEEK}\n\n{text}"
-    return text, day_choice_kb(week, days, position)
+    return text, day_choice_kb(program.id, week, days, position)
 
 
 async def _start_workout(state: FSMContext, **plan: Any) -> None:
@@ -127,6 +127,7 @@ async def cb_day(
     # программу заменили, день уже сделан или неделя ещё не наступила
     if (
         program is None
+        or program.id != callback_data.program_id
         or following is None
         or chosen not in week_sessions(program, following[0])
     ):
@@ -156,6 +157,7 @@ async def cb_skip(
     if (
         await state.get_state() is not None
         or program is None
+        or program.id != callback_data.program_id
         or next_session(program) != skipping
     ):
         await call.answer()

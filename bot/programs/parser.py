@@ -54,6 +54,10 @@ Exercise name: BWx1:00, BWx1:30 / BWx1:30x2 / BWx1:45x2 / BWx1:00
   exercise with its own name, not a note.
 - Nothing else inside the block: no comments, no markdown, no explanations."""
 
+# ИИ отдаёт блок в ```-рамке, и её могут скопировать вместе с ним
+_FENCE = re.compile(r"```[\w-]*")
+# «# Program», «#PROGRAM» — тоже маркер
+_MARKER = re.compile(r"#\s*program", re.IGNORECASE)
 _DAY = re.compile(r"==+(.*?)==+")
 # подход и запятая после него; делить строку по запятым нельзя — вес бывает
 # с запятой: «102,5x5»
@@ -136,13 +140,23 @@ def _add_day(
         raise ProgramParseError(line, str(e)) from None
 
 
-def parse_program(text: str) -> ProgramPlan:
-    numbered = [
+def _content_lines(text: str) -> list[tuple[int, str]]:
+    """Непустые строки без рамок ```, с номерами строк исходного текста."""
+    return [
         (number, line.strip())
         for number, line in enumerate(text.splitlines(), start=1)
-        if line.strip()
+        if line.strip() and not _FENCE.fullmatch(line.strip())
     ]
-    if not numbered or numbered[0][1] != PROGRAM_MARKER:
+
+
+def has_program_marker(text: str) -> bool:
+    lines = _content_lines(text)
+    return bool(lines) and _MARKER.fullmatch(lines[0][1]) is not None
+
+
+def parse_program(text: str) -> ProgramPlan:
+    numbered = _content_lines(text)
+    if not numbered or not _MARKER.fullmatch(numbered[0][1]):
         raise ProgramParseError(
             numbered[0][0] if numbered else 1,
             f'first line must be "{PROGRAM_MARKER}"',

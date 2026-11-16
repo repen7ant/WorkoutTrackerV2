@@ -435,3 +435,22 @@ def test_delete_asks_then_deletes_once(stored):
     yes.message.kb_removed = True
     asyncio.run(view.cb_delete_yes(yes, None, USER))
     assert stored["deleted"] == 1
+
+
+@pytest.mark.parametrize(
+    ("text", "matches"),
+    [
+        ("```\n# PROGRAM\n== A ==\nDips: BWx5\n```", True),
+        ("# program\n== A ==\nDips: BWx5", True),
+        ("hello", False),
+    ],
+)
+def test_program_message_filter(text, matches):
+    from datetime import UTC, datetime
+
+    from aiogram.types import Chat, Message
+
+    message = Message(
+        message_id=1, date=datetime.now(UTC), chat=Chat(id=1, type="private"), text=text
+    )
+    assert bool(import_.IS_PROGRAM.resolve(message)) is matches

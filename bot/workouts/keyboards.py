@@ -11,12 +11,16 @@ class ExerciseChoice(CallbackData, prefix="wk_ex"):
     exercise_id: int
 
 
+# program_id: после нового импорта кнопки старого экрана указывали бы
+# на те же позиции новой программы
 class WkDay(CallbackData, prefix="wk_day"):
+    program_id: int
     week: int
     position: int
 
 
 class WkSkip(CallbackData, prefix="wk_skip"):
+    program_id: int
     week: int
     position: int
 
@@ -26,7 +30,7 @@ class WkPlanEx(CallbackData, prefix="wk_plan_ex"):
 
 
 def day_choice_kb(
-    week: int, days: list[tuple[int, str]], next_position: int
+    program_id: int, week: int, days: list[tuple[int, str]], next_position: int
 ) -> InlineKeyboardMarkup:
     """Дни недели week: следующий — первой кнопкой, остальные — по два в ряд."""
     positions = [pos for pos, _ in days]
@@ -35,14 +39,17 @@ def day_choice_kb(
     builder = InlineKeyboardBuilder()
     builder.button(
         text=f"▶ Start {dict(days)[next_position]}",
-        callback_data=WkDay(week=week, position=next_position),
+        callback_data=WkDay(program_id=program_id, week=week, position=next_position),
     )
     others = [(pos, name) for pos, name in days if pos != next_position]
     for pos, name in others:
-        builder.button(text=name, callback_data=WkDay(week=week, position=pos))
+        builder.button(
+            text=name,
+            callback_data=WkDay(program_id=program_id, week=week, position=pos),
+        )
     builder.button(
         text=f"Skip {dict(days)[next_position]}",
-        callback_data=WkSkip(week=week, position=next_position),
+        callback_data=WkSkip(program_id=program_id, week=week, position=next_position),
     )
     builder.button(text="Free workout", callback_data="wk_free")
     builder.adjust(1, *[2] * (len(others) // 2), *[1] * (len(others) % 2), 2)

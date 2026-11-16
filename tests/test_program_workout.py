@@ -77,20 +77,23 @@ def _seeded(week=1, position=1) -> dict:
 
 def test_day_choice_kb_order():
     days = [(d.position, d.name) for d in PROGRAM.days]
-    assert rows(day_choice_kb(1, days, next_position=2)) == [
-        [("▶ Start Pull", WkDay(week=1, position=2).pack())],
+    assert rows(day_choice_kb(7, 1, days, next_position=2)) == [
+        [("▶ Start Pull", WkDay(program_id=7, week=1, position=2).pack())],
         [
-            ("Push", WkDay(week=1, position=1).pack()),
-            ("Legs", WkDay(week=1, position=3).pack()),
+            ("Push", WkDay(program_id=7, week=1, position=1).pack()),
+            ("Legs", WkDay(program_id=7, week=1, position=3).pack()),
         ],
-        [("Skip Pull", WkSkip(week=1, position=2).pack()), ("Free workout", "wk_free")],
+        [
+            ("Skip Pull", WkSkip(program_id=7, week=1, position=2).pack()),
+            ("Free workout", "wk_free"),
+        ],
     ]
 
 
 def test_day_choice_kb_stale_next_position():
     days = [(d.position, d.name) for d in PROGRAM.days]
-    assert rows(day_choice_kb(2, days, next_position=9))[0] == [
-        ("▶ Start Push", WkDay(week=2, position=1).pack())
+    assert rows(day_choice_kb(7, 2, days, next_position=9))[0] == [
+        ("▶ Start Push", WkDay(program_id=7, week=2, position=1).pack())
     ]
 
 
@@ -235,8 +238,8 @@ def test_workout_offers_next_session_of_week(monkeypatch):
     text, kb = _offer(monkeypatch, _program({(1, 1): False}))
     assert text == "Week 1 of 2 · Next up: <b>Pull</b>. Start it or pick another day:"
     assert rows(kb)[:2] == [
-        [("▶ Start Pull", WkDay(week=1, position=2).pack())],
-        [("Legs", WkDay(week=1, position=3).pack())],
+        [("▶ Start Pull", WkDay(program_id=7, week=1, position=2).pack())],
+        [("Legs", WkDay(program_id=7, week=1, position=3).pack())],
     ]
 
 
@@ -245,8 +248,8 @@ def test_workout_offers_only_days_of_current_week(monkeypatch):
     text, kb = _offer(monkeypatch, _program(done))
     assert "Week 2 of 2 · Next up: <b>Push</b>." in text
     assert rows(kb)[:2] == [
-        [("▶ Start Push", WkDay(week=2, position=1).pack())],
-        [("Legs", WkDay(week=2, position=3).pack())],
+        [("▶ Start Push", WkDay(program_id=7, week=2, position=1).pack())],
+        [("Legs", WkDay(program_id=7, week=2, position=3).pack())],
     ]
 
 
@@ -268,7 +271,11 @@ def test_workout_without_program_starts_free(monkeypatch):
 def test_day_starts_workout_from_plan(monkeypatch):
     _with_program(monkeypatch, PROGRAM)
     call, state = FakeCall(), _state()
-    asyncio.run(recording.cb_day(call, WkDay(week=1, position=1), state, None, USER))
+    asyncio.run(
+        recording.cb_day(
+            call, WkDay(program_id=7, week=1, position=1), state, None, USER
+        )
+    )
     assert asyncio.run(state.get_state()) == WorkoutSession.active
     data = asyncio.run(state.get_data())
     assert data["program_day"] == "Push" and "started_at" in data
@@ -280,7 +287,10 @@ def test_day_starts_workout_from_plan(monkeypatch):
 def test_second_tap_on_day_is_ignored(monkeypatch):
     _with_program(monkeypatch, PROGRAM)
     state = _state()
-    first, second = WkDay(week=1, position=1), WkDay(week=1, position=2)
+    first, second = (
+        WkDay(program_id=7, week=1, position=1),
+        WkDay(program_id=7, week=1, position=2),
+    )
     asyncio.run(recording.cb_day(FakeCall(), first, state, None, USER))
     asyncio.run(recording.cb_day((call := FakeCall()), second, state, None, USER))
     assert asyncio.run(state.get_data())["program_day"] == "Push"
@@ -290,9 +300,15 @@ def test_second_tap_on_day_is_ignored(monkeypatch):
 @pytest.mark.parametrize(
     ("program", "day"),
     [
-        (None, WkDay(week=1, position=1)),  # программу заменили или удалили
-        (PROGRAM, WkDay(week=2, position=1)),  # неделя 1 ещё не пройдена
-        (_program({(1, 1): False}), WkDay(week=1, position=1)),  # уже сделан
+        (
+            None,
+            WkDay(program_id=7, week=1, position=1),
+        ),  # программу заменили или удалили
+        (PROGRAM, WkDay(program_id=7, week=2, position=1)),  # неделя 1 ещё не пройдена
+        (
+            _program({(1, 1): False}),
+            WkDay(program_id=7, week=1, position=1),
+        ),  # уже сделан
     ],
 )
 def test_unavailable_day_is_refused(monkeypatch, program, day):
@@ -394,7 +410,9 @@ class FakeCatalog:
 async def _day_started(monkeypatch, state):
     _with_program(monkeypatch, PROGRAM)
     monkeypatch.setattr(recording, "Catalog", FakeCatalog)
-    await recording.cb_day(FakeCall(), WkDay(week=1, position=1), state, None, USER)
+    await recording.cb_day(
+        FakeCall(), WkDay(program_id=7, week=1, position=1), state, None, USER
+    )
 
 
 def _open_plan_exercise(monkeypatch, index):
@@ -522,7 +540,11 @@ def _skip(monkeypatch, program, week, position):
     call = FakeCall()
     asyncio.run(
         recording.cb_skip(
-            call, WkSkip(week=week, position=position), _state(), None, USER
+            call,
+            WkSkip(program_id=7, week=week, position=position),
+            _state(),
+            None,
+            USER,
         )
     )
     return calls, call
@@ -530,8 +552,8 @@ def _skip(monkeypatch, program, week, position):
 
 def test_day_choice_kb_has_skip():
     days = [(1, "Push"), (3, "Legs")]
-    assert rows(day_choice_kb(1, days, next_position=1))[-1] == [
-        ("Skip Push", WkSkip(week=1, position=1).pack()),
+    assert rows(day_choice_kb(7, 1, days, next_position=1))[-1] == [
+        ("Skip Push", WkSkip(program_id=7, week=1, position=1).pack()),
         ("Free workout", "wk_free"),
     ]
 
@@ -541,7 +563,9 @@ def test_skip_marks_session_and_redraws(monkeypatch):
     assert calls == [(42, 7, 1, 1, True)]
     text, kb = call.message.sent[-1]
     assert text.startswith("Week 1 of 2 · Next up: <b>Pull</b>.")
-    assert rows(kb)[0] == [("▶ Start Pull", WkDay(week=1, position=2).pack())]
+    assert rows(kb)[0] == [
+        ("▶ Start Pull", WkDay(program_id=7, week=1, position=2).pack())
+    ]
 
 
 def test_skip_of_not_next_session_is_ignored(monkeypatch):
@@ -581,3 +605,23 @@ def test_finished_program_starts_free_workout(monkeypatch):
     assert msg.sent[-1][0] == PROGRAM_FINISHED
     assert shown == ["Workout started. Add your first exercise."]
     assert "plan" not in asyncio.run(state.get_data())
+
+
+def test_skip_from_replaced_program_is_ignored(monkeypatch):
+    """Старый экран недели после нового импорта: позиции совпадают, программа — нет."""
+    _with_program(monkeypatch, _program())
+    calls = _with_completion(monkeypatch, _program())
+    call = FakeCall()
+    stale = WkSkip(program_id=6, week=1, position=1)
+    asyncio.run(recording.cb_skip(call, stale, _state(), None, USER))
+    assert calls == []
+    assert call.message.sent == []
+
+
+def test_day_from_replaced_program_is_refused(monkeypatch):
+    _with_program(monkeypatch, _program())
+    call, state = FakeCall(), _state()
+    stale = WkDay(program_id=6, week=1, position=1)
+    asyncio.run(recording.cb_day(call, stale, state, None, USER))
+    assert call.alerts == ["This day is no longer available. Use /workout again."]
+    assert asyncio.run(state.get_state()) is None

@@ -29,7 +29,7 @@ from bot.programs.keyboards import (
     match_kb,
     muscles_kb,
 )
-from bot.programs.parser import PROGRAM_MARKER, parse_program
+from bot.programs.parser import has_program_marker, parse_program
 from bot.programs.service import (
     ExerciseNotAvailable,
     get_program,
@@ -47,6 +47,8 @@ router = Router(name="program_import")
 WORKOUT_IDLE = StateFilter(None, WorkoutSession.active)
 # команды проходят дальше: /workout или /program посреди мастера — не поиск
 NOT_COMMAND = ~F.text.startswith("/")
+# первая строка — маркер; рамку ``` вокруг блока допускаем
+IS_PROGRAM = F.text.func(has_program_marker)
 MAX_FILE_SIZE = 64 * 1024
 # длиннее Telegram сам режет текст на несколько сообщений: начало программы
 # пришло бы без конца
@@ -149,7 +151,7 @@ async def _start(
     await _next_step(message, ex_state, session, user)
 
 
-@router.message(WORKOUT_IDLE, F.text.startswith(PROGRAM_MARKER))
+@router.message(WORKOUT_IDLE, IS_PROGRAM)
 async def on_program_text(
     message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:

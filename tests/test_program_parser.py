@@ -4,7 +4,7 @@ import pytest
 
 from bot.programs.domain import PlanDay, PlanExercise, ProgramPlan, sessions
 from bot.programs.formatters import render_program
-from bot.programs.parser import ProgramParseError, parse_program
+from bot.programs.parser import ProgramParseError, has_program_marker, parse_program
 from bot.workouts.domain import SetEntry
 
 PROGRAM = """# PROGRAM
@@ -290,3 +290,41 @@ def test_sessions_skip_empty_day_week():
         "== Pull ==\nRow: 60x10 / - / 60x10"
     )
     assert sessions(plan.days, plan.weeks) == [(1, 1), (1, 2), (2, 1), (3, 2)]
+
+
+FENCED = "```\n# PROGRAM\n== Push ==\nBench Press: 100x5\n```"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        FENCED,
+        FENCED.replace("```\n#", "```text\n#", 1),
+        "# Program\n== Push ==\nBench Press: 100x5",
+        "#PROGRAM\n== Push ==\nBench Press: 100x5",
+    ],
+)
+def test_parse_tolerates_fences_and_marker_case(text):
+    plan = parse_program(text)
+    assert plan.days[0].exercises[0].name == "Bench Press"
+
+
+def test_fenced_error_keeps_original_line_numbers():
+    with pytest.raises(ProgramParseError) as exc:
+        parse_program("```\n# PROGRAM\n== Push ==\nBench 100 5\n```")
+    assert exc.value.line == 4
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("# PROGRAM\n== A ==", True),
+        (FENCED, True),
+        ("\n```text\n# program\n", True),
+        ("Here is your program:\n# PROGRAM", False),
+        ("```\nhello\n```", False),
+        ("", False),
+    ],
+)
+def test_has_program_marker(text, expected):
+    assert has_program_marker(text) is expected
