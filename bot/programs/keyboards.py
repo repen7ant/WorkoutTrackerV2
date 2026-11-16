@@ -35,6 +35,12 @@ def muscles_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def program_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Delete program", callback_data="pg_delete")
+    return builder.as_markup()
+
+
 def confirm_kb(replacing: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(

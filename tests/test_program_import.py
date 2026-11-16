@@ -2,16 +2,22 @@ import asyncio
 from decimal import Decimal
 
 import pytest
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.methods import EditMessageReplyMarkup
 
 from bot.catalog.api import ExerciseInfo, rank_similar
+from bot.common.formatting import escape
+from bot.handlers import start
 from bot.programs.domain import InvalidProgram
 from bot.programs.draft import decode_txt, plan_from_fsm, plan_to_fsm
-from bot.programs.handlers import import_
+from bot.programs.formatters import render_program
+from bot.programs.handlers import import_, view
 from bot.programs.keyboards import ImportPick, confirm_kb, match_kb
 from bot.programs.parser import parse_program
+from bot.programs.repository import StoredDay, StoredExercise, StoredProgram
 from bot.programs.states import ProgramImport
 from bot.users.models import User
 from bot.utils import fsm_json
@@ -99,6 +105,11 @@ def test_rank_similar_prefers_fewer_extra_words():
 # --- мастер ---
 
 
+NOT_MODIFIED = TelegramBadRequest(
+    EditMessageReplyMarkup(), "Bad Request: message is not modified"
+)
+
+
 class SentMessage:
     def __init__(self, message_id, text, kb):
         self.message_id, self.text, self.kb = message_id, text, kb
@@ -120,7 +131,9 @@ class FakeMessage:
     def __init__(self, text=None, bot=None):
         self.text, self.bot, self.chat = text, bot or FakeBot(), FakeChat()
         self.sent: list[SentMessage] = []
+        self.documents: list[bytes] = []
         self.message_id = 100
+        self.kb_removed = False
 
     async def answer(self, text, reply_markup=None, **kwargs):
         msg = SentMessage(200 + len(self.sent), text, reply_markup)
@@ -131,7 +144,12 @@ class FakeMessage:
         self.sent.append(SentMessage(self.message_id, text, reply_markup))
 
     async def edit_reply_markup(self, reply_markup=None):
-        pass
+        if reply_markup is None and self.kb_removed:
+            raise NOT_MODIFIED
+        self.kb_removed = reply_markup is None
+
+    async def answer_document(self, document, **kwargs):
+        self.documents.append(document.data)
 
 
 class FakeCall:
@@ -306,3 +324,97 @@ def test_cancel_clears_import(wizard):
     asyncio.run(import_.cb_cancel(call, state))
     assert call.message.sent[-1].text == "Import cancelled."
     assert asyncio.run(state.get_state()) is None
+
+
+# --- /program и /start ---
+
+
+def test_start_explains_the_cycle():
+    msg = FakeMessage("/start")
+    asyncio.run(start.cmd_start(msg))
+    text = msg.sent[-1].text
+    for part in ("/workout", "/export", "# PROGRAM", "/program", "/settings"):
+        assert part in text
+
+
+@pytest.fixture
+def stored(monkeypatch):
+    calls = {"program": None, "deleted": 0}
+
+    async def fake_get_program(session, user_id):
+        return calls["program"]
+
+    async def fake_delete(session, user_id):
+        calls["deleted"] += 1
+        return calls["deleted"] == 1
+
+    monkeypatch.setattr(view, "get_program", fake_get_program)
+    monkeypatch.setattr(view, "delete_program", fake_delete)
+    return calls
+
+
+def _stored_program(text=PROGRAM):
+    plan = parse_program(text)
+    days = [
+        StoredDay(
+            i,
+            day.name,
+            [
+                StoredExercise(1, ex.name, ex.notes, list(ex.sets))
+                for ex in day.exercises
+            ],
+        )
+        for i, day in enumerate(plan.days, start=1)
+    ]
+    return StoredProgram(id=1, next_position=1, days=days)
+
+
+def test_program_without_program_explains_import(stored):
+    msg = FakeMessage("/program")
+    asyncio.run(view.cmd_program(msg, None, USER))
+    assert "# PROGRAM" in msg.sent[-1].text
+    assert msg.sent[-1].kb is None
+
+
+def test_program_shows_it_in_import_format(stored):
+    stored["program"] = _stored_program(PROGRAM.replace("pause", "pause <3s>"))
+    msg = FakeMessage("/program")
+    asyncio.run(view.cmd_program(msg, None, USER))
+    sent = msg.sent[-1]
+    assert sent.text == (
+        "<pre>" + escape(render_program(stored["program"].days)) + "</pre>"
+    )
+    assert rows(sent.kb) == [[("Delete program", "pg_delete")]]
+
+
+def test_long_program_is_sent_as_file(stored):
+    days = "".join(
+        f"== Day {d} ==\n"
+        + "".join(
+            f"Exercise {d}-{e} with a long name: " + ", ".join(["100x5"] * 10) + "\n"
+            for e in range(12)
+        )
+        for d in range(10)
+    )
+    stored["program"] = _stored_program("# PROGRAM\n" + days)
+    msg = FakeMessage("/program")
+    asyncio.run(view.cmd_program(msg, None, USER))
+    assert msg.documents[-1].startswith(b"# PROGRAM\n")
+    assert msg.sent == []
+
+
+def test_delete_asks_then_deletes_once(stored):
+    stored["program"] = _stored_program()
+    ask = FakeCall(FakeMessage())
+    asyncio.run(view.cb_delete(ask))
+    question = ask.message.sent[-1]
+    assert question.text.startswith("Delete program?")
+    assert rows(question.kb) == [[("Yes", "pg_delete_yes"), ("No", "pg_delete_no")]]
+
+    yes = FakeCall(FakeMessage())
+    asyncio.run(view.cb_delete_yes(yes, None, USER))
+    assert yes.message.sent[-1].text == "Program deleted."
+    # второй тап: кнопок уже нет
+    yes.message.kb_removed = True
+    asyncio.run(view.cb_delete_yes(yes, None, USER))
+    assert stored["deleted"] == 1
