@@ -16,6 +16,11 @@ class WkDay(CallbackData, prefix="wk_day"):
     position: int
 
 
+class WkSkip(CallbackData, prefix="wk_skip"):
+    week: int
+    position: int
+
+
 class WkPlanEx(CallbackData, prefix="wk_plan_ex"):
     index: int  # пункт плана дня в черновике
 
@@ -35,8 +40,12 @@ def day_choice_kb(
     others = [(pos, name) for pos, name in days if pos != next_position]
     for pos, name in others:
         builder.button(text=name, callback_data=WkDay(week=week, position=pos))
+    builder.button(
+        text=f"Skip {dict(days)[next_position]}",
+        callback_data=WkSkip(week=week, position=next_position),
+    )
     builder.button(text="Free workout", callback_data="wk_free")
-    builder.adjust(1, *[2] * (len(others) // 2), *[1] * (len(others) % 2), 1)
+    builder.adjust(1, *[2] * (len(others) // 2), *[1] * (len(others) % 2), 2)
     return builder.as_markup()
 
 

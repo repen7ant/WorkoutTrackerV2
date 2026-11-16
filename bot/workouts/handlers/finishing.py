@@ -13,13 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.typing import FilteringBoundLogger
 
 from bot.common.formatting import format_workout_time
-from bot.programs.service import complete_session
+from bot.programs.repository import StoredProgram
+from bot.programs.service import complete_session, next_session
 from bot.users.models import User
 from bot.workouts.domain import InvalidWorkout
 from bot.workouts.draft import build_record, utc_now_iso, workout_today
 from bot.workouts.formatters import format_confirm
 from bot.workouts.handlers.common import (
     BOT_COMMANDS,
+    PROGRAM_FINISHED,
     remove_kb,
     send_workout_main,
     workout_main_view,
@@ -124,19 +126,21 @@ async def _save(
     await call.message.answer(f"Workout saved: {record.date:%d-%m-%y}{when}.")
     await call.answer()
     if "program_id" in data:
-        await _complete_program_session(session, user, data)
+        program = await _complete_program_session(session, user, data)
+        if program is not None and next_session(program) is None:
+            await call.message.answer(PROGRAM_FINISHED)
 
 
 async def _complete_program_session(
     session: AsyncSession, user: User, data: dict[str, Any]
-) -> None:
+) -> StoredProgram | None:
     """
     Сессия программы сделана. Тренировка уже сохранена и черновик очищен:
     ошибка здесь не должна просить «попробовать снова» — это сохранило бы
     тренировку второй раз. Не отметилась — бот предложит этот день снова.
     """
     try:
-        await complete_session(
+        return await complete_session(
             session,
             user.id,
             data["program_id"],
@@ -147,6 +151,7 @@ async def _complete_program_session(
         await logger.awarning(
             "Program session not completed", user_id=user.id, error=repr(e)
         )
+        return None
 
 
 async def _restore_kb(call: CallbackQuery, kb: InlineKeyboardMarkup) -> None:

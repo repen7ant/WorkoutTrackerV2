@@ -10,7 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import Catalog, ExerciseInfo
 from bot.common.formatting import escape, format_set_compact
-from bot.programs.service import get_program, next_session, week_sessions
+from bot.programs.repository import StoredProgram
+from bot.programs.service import (
+    complete_session,
+    get_program,
+    next_session,
+    week_sessions,
+)
 from bot.users.models import User
 from bot.workouts.domain import (
     MAX_EXERCISE_NOTES,
@@ -31,12 +37,19 @@ from bot.workouts.formatters import (
     format_exercise_log,
     format_sets_prompt,
 )
-from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_main
+from bot.workouts.handlers.common import (
+    BOT_COMMANDS,
+    LAST_WEEK,
+    PROGRAM_FINISHED,
+    remove_kb,
+    send_workout_main,
+)
 from bot.workouts.keyboards import (
     ExerciseChoice,
     WkDay,
     WkPlanEx,
     WkPlanSet,
+    WkSkip,
     day_choice_kb,
     exercise_choices_kb,
     set_entered_kb,
@@ -60,20 +73,34 @@ async def cmd_workout(
         )
         return
     program = await get_program(session, db_user.id)
-    following = next_session(program) if program else None
-    if program is None or following is None:
+    view = _day_choice_view(program) if program else None
+    if view is None:
+        if program is not None:
+            await message.answer(PROGRAM_FINISHED)
         await _start_workout(state)
         await send_workout_main(message, state)
         return
+    text, kb = view
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+def _day_choice_view(
+    program: StoredProgram,
+) -> tuple[str, InlineKeyboardMarkup] | None:
+    """Экран выбора дня; None — программа пройдена."""
+    following = next_session(program)
+    if following is None:
+        return None
     week, position = following
     names = {day.position: day.name for day in program.days}
     days = [(pos, names[pos]) for _, pos in week_sessions(program, week)]
-    await message.answer(
+    text = (
         f"Week {week} of {program.weeks} · Next up: <b>{escape(names[position])}</b>."
-        " Start it or pick another day:",
-        parse_mode="HTML",
-        reply_markup=day_choice_kb(week, days, position),
+        " Start it or pick another day:"
     )
+    if week == program.weeks and program.weeks > 1:
+        text = f"{LAST_WEEK}\n\n{text}"
+    return text, day_choice_kb(week, days, position)
 
 
 async def _start_workout(state: FSMContext, **plan: Any) -> None:
@@ -111,6 +138,43 @@ async def cb_day(
     seed_plan(plan, program, *chosen)
     await _start_workout(state, **plan)
     await send_workout_main(call, state)
+    await call.answer()
+
+
+# пропустить предложенный день
+@router.callback_query(WkSkip.filter())
+async def cb_skip(
+    call: CallbackQuery,
+    callback_data: WkSkip,
+    state: FSMContext,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    program = await get_program(session, db_user.id)
+    skipping = (callback_data.week, callback_data.position)
+    # тренировка уже идёт, двойной тап или старая кнопка: пропускать нечего
+    if (
+        await state.get_state() is not None
+        or program is None
+        or next_session(program) != skipping
+    ):
+        await call.answer()
+        return
+    program = await complete_session(
+        session, db_user.id, program.id, *skipping, skipped=True
+    )
+    if program is None:
+        await call.answer(
+            "This day is no longer available. Use /workout again.", show_alert=True
+        )
+        return
+    view = _day_choice_view(program)
+    with suppress(TelegramBadRequest):
+        if view is None:
+            await call.message.edit_text(PROGRAM_FINISHED, reply_markup=None)
+        else:
+            text, kb = view
+            await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     await call.answer()
 
 

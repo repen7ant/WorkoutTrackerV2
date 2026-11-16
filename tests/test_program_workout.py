@@ -15,11 +15,12 @@ from bot.workouts.domain import SetEntry
 from bot.workouts.draft import plan_statuses, plan_todo, seed_plan, toggle_plan_set
 from bot.workouts.formatters import format_current_sets, format_workout_main
 from bot.workouts.handlers import recording
-from bot.workouts.handlers.common import workout_main_view
+from bot.workouts.handlers.common import LAST_WEEK, PROGRAM_FINISHED, workout_main_view
 from bot.workouts.keyboards import (
     WkDay,
     WkPlanEx,
     WkPlanSet,
+    WkSkip,
     day_choice_kb,
     set_entered_kb,
     workout_main_kb,
@@ -82,7 +83,7 @@ def test_day_choice_kb_order():
             ("Push", WkDay(week=1, position=1).pack()),
             ("Legs", WkDay(week=1, position=3).pack()),
         ],
-        [("Free workout", "wk_free")],
+        [("Skip Pull", WkSkip(week=1, position=2).pack()), ("Free workout", "wk_free")],
     ]
 
 
@@ -242,7 +243,7 @@ def test_workout_offers_next_session_of_week(monkeypatch):
 def test_workout_offers_only_days_of_current_week(monkeypatch):
     done = {(1, 1): False, (1, 2): True, (1, 3): False, (2, 2): False}
     text, kb = _offer(monkeypatch, _program(done))
-    assert text.startswith("Week 2 of 2 · Next up: <b>Push</b>.")
+    assert "Week 2 of 2 · Next up: <b>Push</b>." in text
     assert rows(kb)[:2] == [
         [("▶ Start Push", WkDay(week=2, position=1).pack())],
         [("Legs", WkDay(week=2, position=3).pack())],
@@ -490,3 +491,93 @@ def test_next_exercise_starts_without_previous_sets(monkeypatch):
     asyncio.run(recording.cb_finish_exercise(FakeCall(), state))
     asyncio.run(open_ex(FakeCall(), WkPlanEx(index=2), state, None, USER))
     assert asyncio.run(state.get_data())["current_sets"] == []
+
+
+# --- пропуск дня и конец программы ---
+
+ALL_BUT_LAST = {
+    (1, 1): False,
+    (1, 2): False,
+    (1, 3): True,
+    (2, 1): False,
+    (2, 2): False,
+}
+
+
+def _with_completion(monkeypatch, program):
+    calls = []
+
+    async def fake_complete(session, user_id, program_id, week, day_position, skipped):
+        calls.append((user_id, program_id, week, day_position, skipped))
+        program.done[(week, day_position)] = skipped
+        return program
+
+    monkeypatch.setattr(recording, "complete_session", fake_complete)
+    return calls
+
+
+def _skip(monkeypatch, program, week, position):
+    _with_program(monkeypatch, program)
+    calls = _with_completion(monkeypatch, program)
+    call = FakeCall()
+    asyncio.run(
+        recording.cb_skip(
+            call, WkSkip(week=week, position=position), _state(), None, USER
+        )
+    )
+    return calls, call
+
+
+def test_day_choice_kb_has_skip():
+    days = [(1, "Push"), (3, "Legs")]
+    assert rows(day_choice_kb(1, days, next_position=1))[-1] == [
+        ("Skip Push", WkSkip(week=1, position=1).pack()),
+        ("Free workout", "wk_free"),
+    ]
+
+
+def test_skip_marks_session_and_redraws(monkeypatch):
+    calls, call = _skip(monkeypatch, _program(), 1, 1)
+    assert calls == [(42, 7, 1, 1, True)]
+    text, kb = call.message.sent[-1]
+    assert text.startswith("Week 1 of 2 · Next up: <b>Pull</b>.")
+    assert rows(kb)[0] == [("▶ Start Pull", WkDay(week=1, position=2).pack())]
+
+
+def test_skip_of_not_next_session_is_ignored(monkeypatch):
+    calls, call = _skip(monkeypatch, _program(), 1, 2)
+    assert calls == []
+    assert call.message.sent == []
+
+
+def test_skip_of_last_session_finishes_program(monkeypatch):
+    calls, call = _skip(monkeypatch, _program(dict(ALL_BUT_LAST)), 2, 3)
+    assert calls == [(42, 7, 2, 3, True)]
+    assert call.message.sent[-1] == (PROGRAM_FINISHED, None)
+
+
+def test_last_week_line(monkeypatch):
+    done = {(1, 1): False, (1, 2): False, (1, 3): False}
+    text, _ = _offer(monkeypatch, _program(done))
+    assert text.startswith(f"{LAST_WEEK}\n\nWeek 2 of 2 · Next up: <b>Push</b>.")
+
+
+def test_first_week_has_no_last_week_line(monkeypatch):
+    text, _ = _offer(monkeypatch, _program())
+    assert LAST_WEEK not in text
+
+
+def test_finished_program_starts_free_workout(monkeypatch):
+    done = {**ALL_BUT_LAST, (2, 3): False}
+    _with_program(monkeypatch, _program(done))
+    shown = []
+
+    async def fake_send(target, state):
+        shown.append(workout_main_view(await state.get_data())[0])
+
+    monkeypatch.setattr(recording, "send_workout_main", fake_send)
+    msg, state = FakeMessage("/workout"), _state()
+    asyncio.run(recording.cmd_workout(msg, state, None, USER))
+    assert msg.sent[-1][0] == PROGRAM_FINISHED
+    assert shown == ["Workout started. Add your first exercise."]
+    assert "plan" not in asyncio.run(state.get_data())

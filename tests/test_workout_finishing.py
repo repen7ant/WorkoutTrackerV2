@@ -12,6 +12,7 @@ from bot.users.models import User
 from bot.utils import fsm_json
 from bot.workouts.formatters import format_confirm, format_workout_main
 from bot.workouts.handlers import finishing
+from bot.workouts.handlers.common import PROGRAM_FINISHED
 from bot.workouts.handlers.finishing import Step, step_after_date, step_after_finish
 from bot.workouts.keyboards import (
     cancel_confirm_kb,
@@ -252,7 +253,9 @@ SAVING_USER = User(
 )
 
 
-def _save_program_workout(monkeypatch, draft, record_error=None, complete_error=None):
+def _save_program_workout(
+    monkeypatch, draft, record_error=None, complete_error=None, completed=None
+):
     calls = {"recorded": None, "completed": []}
 
     async def fake_record_workout(session, record, program_day=None, program_week=None):
@@ -265,6 +268,7 @@ def _save_program_workout(monkeypatch, draft, record_error=None, complete_error=
         if complete_error is not None:
             raise complete_error
         calls["completed"].append((user_id, program_id, week, day_position))
+        return completed
 
     monkeypatch.setattr(finishing, "record_workout", fake_record_workout)
     monkeypatch.setattr(finishing, "complete_session", fake_complete_session)
@@ -309,3 +313,27 @@ def test_session_error_keeps_saved_workout(monkeypatch):
     assert calls["recorded"] == ("Pull", 3)
     assert msg.answers[-1].startswith("Workout saved")
     assert asyncio.run(state.get_state()) is None
+
+
+def _program_done(finished: bool):
+    from bot.programs.repository import StoredDay, StoredExercise, StoredProgram
+    from bot.workouts.domain import SetEntry
+
+    day = StoredDay(1, "Pull", [StoredExercise(5, "Row", None, [[SetEntry(None, 8)]])])
+    return StoredProgram(
+        id=7, weeks=1, days=[day], done={(1, 1): False} if finished else {}
+    )
+
+
+@pytest.mark.parametrize(
+    ("completed", "finished"),
+    [
+        (_program_done(finished=True), True),
+        (_program_done(finished=False), False),
+        (None, False),  # программу заменили, пока шла тренировка
+    ],
+)
+def test_save_says_when_program_is_finished(monkeypatch, completed, finished):
+    _, msg, _ = _save_program_workout(monkeypatch, PROGRAM_DRAFT, completed=completed)
+    assert msg.answers[0].startswith("Workout saved")
+    assert (PROGRAM_FINISHED in msg.answers) is finished

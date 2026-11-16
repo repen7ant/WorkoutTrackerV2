@@ -13,6 +13,9 @@ from bot.workouts.keyboards import workout_main_kb
 # заметок молча становится текстом заметки, а /start — подходом.
 BOT_COMMANDS = Command("start", "workout", "exercises", "history", "export", "program")
 
+LAST_WEEK = "Last week of the program — /export after it."
+PROGRAM_FINISHED = "Program finished — /export your log to get the next one."
+
 
 def workout_main_view(data: dict[str, Any]) -> tuple[str, InlineKeyboardMarkup]:
     """Окно тренировки; у тренировки по программе — с планом дня."""
