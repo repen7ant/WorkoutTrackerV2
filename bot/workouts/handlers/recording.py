@@ -8,8 +8,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.catalog.api import Catalog
-from bot.common.formatting import escape
+from bot.catalog.api import Catalog, ExerciseInfo
+from bot.common.formatting import escape, format_set_compact
 from bot.programs.service import get_program
 from bot.users.models import User
 from bot.workouts.domain import (
@@ -18,7 +18,14 @@ from bot.workouts.domain import (
     InvalidWorkout,
     exercise_notes,
 )
-from bot.workouts.draft import seed_plan, set_to_fsm, sets_from_fsm, utc_now_iso
+from bot.workouts.draft import (
+    plan_todo,
+    seed_plan,
+    set_to_fsm,
+    sets_from_fsm,
+    toggle_plan_set,
+    utc_now_iso,
+)
 from bot.workouts.formatters import (
     format_current_sets,
     format_exercise_log,
@@ -28,6 +35,8 @@ from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_m
 from bot.workouts.keyboards import (
     ExerciseChoice,
     WkDay,
+    WkPlanEx,
+    WkPlanSet,
     day_choice_kb,
     exercise_choices_kb,
     set_entered_kb,
@@ -150,6 +159,64 @@ async def cb_exercise_chosen(
     if exercise is None:
         await call.answer("Exercise not found.", show_alert=True)
         return
+    await _open_exercise(call, state, session, db_user, exercise)
+    await call.answer()
+
+
+# упражнение из плана дня
+@router.callback_query(WkPlanEx.filter(), WorkoutSession.active)
+async def cb_plan_exercise(
+    call: CallbackQuery,
+    callback_data: WkPlanEx,
+    state: FSMContext,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    data = await state.get_data()
+    if callback_data.index not in dict(plan_todo(data)):
+        # уже сделано: второй тап или старая кнопка
+        await call.answer()
+        return
+    item = data["plan"][callback_data.index]
+    exercise = await Catalog(session).get_visible(item["exercise_id"], db_user.id)
+    if exercise is None:
+        # удалили из каталога уже во время тренировки
+        item["deleted"] = True
+        await state.update_data(plan=data["plan"])
+        await send_workout_main(call, state)
+        await call.answer(
+            "This exercise was deleted from the catalog.", show_alert=True
+        )
+        return
+    await _open_exercise(
+        call, state, session, db_user, exercise, item, callback_data.index
+    )
+    await call.answer()
+
+
+def _no_current_exercise() -> dict[str, Any]:
+    # каждый раз новый список: MemoryStorage хранит его как есть, и подходы
+    # следующего упражнения дописались бы в общий
+    return {
+        "current_exercise_id": None,
+        "current_exercise_name": None,
+        "current_sets": [],
+        "current_notes": None,
+        "current_plan_index": None,
+        "current_plan_sets": None,
+        "current_plan_hint": None,
+    }
+
+
+async def _open_exercise(
+    call: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+    db_user: User,
+    exercise: ExerciseInfo,
+    plan_item: dict[str, Any] | None = None,
+    plan_index: int | None = None,
+) -> None:
     log_size = db_user.exercise_log_size
     if log_size:
         log = await WorkoutRepository(session).with_exercise(
@@ -160,34 +227,46 @@ async def cb_exercise_chosen(
         await call.message.answer(
             format_exercise_log(exercise.name, log), parse_mode="HTML"
         )
-        prompt = format_sets_prompt()
+    current = {
+        **_no_current_exercise(),
+        "current_exercise_id": exercise.id,
+        "current_exercise_name": exercise.name,
+    }
+    if plan_item is not None:
+        current.update(
+            current_plan_index=plan_index,
+            current_plan_sets=plan_item["sets"],
+            current_plan_hint=plan_item["notes"],
+        )
+        prompt, kb = _sets_view(current)
     else:
         # без лога название упражнения больше нигде не видно
-        prompt = format_sets_prompt(exercise.name)
-    sent = await call.message.answer(
-        prompt, parse_mode="HTML", reply_markup=set_entered_kb()
-    )
+        prompt = format_sets_prompt(None if log_size else exercise.name)
+        kb = set_entered_kb()
+    sent = await call.message.answer(prompt, parse_mode="HTML", reply_markup=kb)
     await state.set_state(WorkoutSession.entering_sets)
     await state.update_data(
-        current_exercise_id=exercise.id,
-        current_exercise_name=exercise.name,
-        current_sets=[],
-        current_notes=None,
-        sets_message_id=sent.message_id,
-        last_msg_id=sent.message_id,
+        **current, sets_message_id=sent.message_id, last_msg_id=sent.message_id
     )
-    await call.answer()
 
 
 def _sets_view(data: dict[str, Any]) -> tuple[str, InlineKeyboardMarkup]:
     # у тренировки, начатой до заметок к упражнениям, ключа current_notes нет
     notes = data.get("current_notes")
+    current_sets = data.get("current_sets", [])
+    plan_sets = data.get("current_plan_sets")
+    labels = (
+        [format_set_compact(s) for s in sets_from_fsm(plan_sets)] if plan_sets else None
+    )
     text = format_current_sets(
         data["current_exercise_name"],
         notes,
-        sets_from_fsm(data.get("current_sets", [])),
+        sets_from_fsm(current_sets),
+        plan_line=", ".join(labels) if labels else None,
+        hint=data.get("current_plan_hint"),
     )
-    return text, set_entered_kb(has_notes=bool(notes))
+    checked = {s["plan_idx"] for s in current_sets if "plan_idx" in s}
+    return text, set_entered_kb(has_notes=bool(notes), plan=labels, checked=checked)
 
 
 async def show_sets(
@@ -271,6 +350,25 @@ async def enter_set(message: Message, state: FSMContext) -> None:
     await show_sets(message, state, user_message_deleted=deleted)
 
 
+# галочка у планового подхода
+@router.callback_query(WkPlanSet.filter(), WorkoutSession.entering_sets)
+async def cb_plan_set(
+    call: CallbackQuery, callback_data: WkPlanSet, state: FSMContext
+) -> None:
+    data = await state.get_data()
+    plan_sets = data.get("current_plan_sets") or []
+    if not 0 <= callback_data.idx < len(plan_sets):
+        await call.answer()
+        return
+    current_sets = data.get("current_sets", [])
+    toggle_plan_set(current_sets, plan_sets, callback_data.idx)
+    await state.update_data(current_sets=current_sets)
+    text, kb = _sets_view(await state.get_data())
+    with suppress(TelegramBadRequest):
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    await call.answer()
+
+
 # убрать заметку к упражнению
 @router.callback_query(F.data == "wk_remove_note", WorkoutSession.entering_sets)
 async def cb_remove_note(call: CallbackQuery, state: FSMContext) -> None:
@@ -287,25 +385,26 @@ async def cb_remove_note(call: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "wk_finish_exercise", WorkoutSession.entering_sets)
 async def cb_finish_exercise(call: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    if not data.get("current_sets"):
+    plan_index = data.get("current_plan_index")
+    current_sets = data.get("current_sets")
+    if not current_sets and plan_index is None:
         await call.answer("Add at least one set first.", show_alert=True)
         return
     exercises = data.get("exercises", [])
-    exercises.append(
-        {
+    # упражнение из плана без подходов — пропуск: в тренировку не попадает
+    if current_sets:
+        entry = {
             "exercise_id": data["current_exercise_id"],
             "exercise_name": data["current_exercise_name"],
-            "sets": data["current_sets"],
+            "sets": [
+                {k: v for k, v in s.items() if k != "plan_idx"} for s in current_sets
+            ],
             "notes": data.get("current_notes"),
         }
-    )
-    await state.update_data(
-        exercises=exercises,
-        current_exercise_id=None,
-        current_exercise_name=None,
-        current_sets=[],
-        current_notes=None,
-    )
+        if plan_index is not None:
+            entry["plan_index"] = plan_index
+        exercises.append(entry)
+    await state.update_data(exercises=exercises, **_no_current_exercise())
     await state.set_state(WorkoutSession.active)
     await remove_kb(call)
     await call.answer()
@@ -315,12 +414,7 @@ async def cb_finish_exercise(call: CallbackQuery, state: FSMContext) -> None:
 # отменить текущее упражнение
 @router.callback_query(F.data == "wk_cancel_exercise")
 async def cb_cancel_exercise(call: CallbackQuery, state: FSMContext) -> None:
-    await state.update_data(
-        current_exercise_id=None,
-        current_exercise_name=None,
-        current_sets=[],
-        current_notes=None,
-    )
+    await state.update_data(**_no_current_exercise())
     await state.set_state(WorkoutSession.active)
     await remove_kb(call)
     await call.answer()

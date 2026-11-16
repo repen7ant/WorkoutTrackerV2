@@ -64,13 +64,27 @@ def exercise_choices_kb(exercises: list) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def set_entered_kb(has_notes: bool = False) -> InlineKeyboardMarkup:
+class WkPlanSet(CallbackData, prefix="wk_plan_set"):
+    idx: int  # плановый подход текущего упражнения
+
+
+def set_entered_kb(
+    has_notes: bool = False,
+    plan: list[str] | None = None,
+    checked: set[int] | None = None,
+) -> InlineKeyboardMarkup:
+    """plan — подписи плановых подходов; checked — отмеченные галочкой."""
     builder = InlineKeyboardBuilder()
+    plan = plan or []
+    for idx, label in enumerate(plan):
+        text = f"✓ {label}" if idx in (checked or set()) else label
+        builder.button(text=text, callback_data=WkPlanSet(idx=idx))
     builder.button(text="Finish exercise", callback_data="wk_finish_exercise")
     if has_notes:
         builder.button(text="Remove note", callback_data="wk_remove_note")
     builder.button(text="Cancel exercise", callback_data="wk_cancel_exercise")
-    builder.adjust(1)
+    full, rest = divmod(len(plan), 3)
+    builder.adjust(*[3] * full, *([rest] if rest else []), 1)
     return builder.as_markup()
 
 

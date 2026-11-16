@@ -1,19 +1,28 @@
 import asyncio
 from decimal import Decimal
+from types import SimpleNamespace
 
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from bot.catalog.api import ExerciseInfo
 from bot.programs.repository import StoredDay, StoredExercise, StoredProgram
 from bot.users.models import User
 from bot.utils import fsm_json
 from bot.workouts.domain import SetEntry
-from bot.workouts.draft import plan_statuses, plan_todo, seed_plan
-from bot.workouts.formatters import format_workout_main
+from bot.workouts.draft import plan_statuses, plan_todo, seed_plan, toggle_plan_set
+from bot.workouts.formatters import format_current_sets, format_workout_main
 from bot.workouts.handlers import recording
 from bot.workouts.handlers.common import workout_main_view
-from bot.workouts.keyboards import WkDay, WkPlanEx, day_choice_kb, workout_main_kb
+from bot.workouts.keyboards import (
+    WkDay,
+    WkPlanEx,
+    WkPlanSet,
+    day_choice_kb,
+    set_entered_kb,
+    workout_main_kb,
+)
 from bot.workouts.states import WorkoutSession
 
 BENCH_SETS = [SetEntry(Decimal("100.00"), 5), SetEntry(Decimal("100.00"), 5)]
@@ -146,9 +155,13 @@ class FakeMessage:
 
     async def answer(self, text, reply_markup=None, **kwargs):
         self.sent.append((text, reply_markup))
+        return SimpleNamespace(message_id=100 + len(self.sent))
 
     async def edit_text(self, text, reply_markup=None, **kwargs):
         self.sent.append((text, reply_markup))
+
+    async def edit_reply_markup(self, reply_markup=None):
+        pass
 
 
 class FakeCall:
@@ -239,3 +252,185 @@ def test_free_workout(monkeypatch):
     assert asyncio.run(state.get_state()) == WorkoutSession.active
     assert "plan" not in asyncio.run(state.get_data())
     assert call.message.sent[-1][0] == "Workout started. Add your first exercise."
+
+
+# --- экран упражнения из плана ---
+
+PLAN_SETS = [
+    {"weight": Decimal("100"), "reps": 5, "seconds": None},
+    {"weight": Decimal("100"), "reps": 5, "seconds": None},
+    {"weight": Decimal("80"), "reps": 8, "seconds": None},
+]
+MANUAL = {"weight": Decimal("95"), "reps": 5, "seconds": None}
+
+
+def test_toggle_checks_and_unchecks():
+    current = []
+    toggle_plan_set(current, PLAN_SETS, 2)
+    assert current == [{**PLAN_SETS[2], "plan_idx": 2}]
+    toggle_plan_set(current, PLAN_SETS, 2)
+    assert current == []
+
+
+def test_untoggle_keeps_manual_sets():
+    current = []
+    toggle_plan_set(current, PLAN_SETS, 0)
+    current.append(dict(MANUAL))
+    toggle_plan_set(current, PLAN_SETS, 1)
+    toggle_plan_set(current, PLAN_SETS, 0)
+    assert current == [MANUAL, {**PLAN_SETS[1], "plan_idx": 1}]
+
+
+def test_set_entered_kb_plan_buttons():
+    kb = set_entered_kb(plan=["100x5", "100x5", "80x8", "BWx1:30"], checked={1})
+    assert rows(kb) == [
+        [
+            ("100x5", WkPlanSet(idx=0).pack()),
+            ("✓ 100x5", WkPlanSet(idx=1).pack()),
+            ("80x8", WkPlanSet(idx=2).pack()),
+        ],
+        [("BWx1:30", WkPlanSet(idx=3).pack())],
+        [("Finish exercise", "wk_finish_exercise")],
+        [("Cancel exercise", "wk_cancel_exercise")],
+    ]
+
+
+def test_set_entered_kb_without_plan_unchanged():
+    assert rows(set_entered_kb(has_notes=True)) == [
+        [("Finish exercise", "wk_finish_exercise")],
+        [("Remove note", "wk_remove_note")],
+        [("Cancel exercise", "wk_cancel_exercise")],
+    ]
+
+
+def test_format_current_sets_with_plan():
+    text = format_current_sets(
+        "Bench Press",
+        "felt easy",
+        [SetEntry(Decimal("100"), 5)],
+        plan_line="100x5, 100x5",
+        hint="pause <2s>",
+    )
+    assert text == (
+        "<b>Bench Press</b>\n"
+        "Plan: 100x5, 100x5\n"
+        "Tip: pause &lt;2s&gt;\n"
+        "<i>felt easy</i>\n"
+        "\n"
+        "1. 100kg x 5\n"
+        "\n"
+        "Tap a planned set once done, or enter a set or a note:"
+    )
+
+
+class FakeCatalog:
+    def __init__(self, session):
+        pass
+
+    async def get_visible(self, exercise_id, user_id):
+        names = {1: "Bench Press", 5: "Row", 6: "Squat"}
+        if exercise_id in names:
+            return ExerciseInfo(exercise_id, names[exercise_id])
+        return None
+
+
+async def _day_started(monkeypatch, state):
+    _with_program(monkeypatch, PROGRAM)
+    monkeypatch.setattr(recording, "Catalog", FakeCatalog)
+    await recording.cb_day(FakeCall(), WkDay(position=1), state, None, USER)
+
+
+def _open_plan_exercise(monkeypatch, index):
+    state = _state()
+    asyncio.run(_day_started(monkeypatch, state))
+    call = FakeCall()
+    asyncio.run(
+        recording.cb_plan_exercise(call, WkPlanEx(index=index), state, None, USER)
+    )
+    return state, call
+
+
+def test_plan_exercise_opens_with_plan(monkeypatch):
+    state, call = _open_plan_exercise(monkeypatch, 0)
+    assert asyncio.run(state.get_state()) == WorkoutSession.entering_sets
+    data = asyncio.run(state.get_data())
+    assert (data["current_exercise_id"], data["current_plan_index"]) == (1, 0)
+    text, kb = call.message.sent[-1]
+    assert "Plan: 100x5, 100x5" in text and "Tip: pause" in text
+    assert rows(kb)[0] == [
+        ("100x5", WkPlanSet(idx=0).pack()),
+        ("100x5", WkPlanSet(idx=1).pack()),
+    ]
+
+
+def test_plan_set_tap_checks_it(monkeypatch):
+    state, _ = _open_plan_exercise(monkeypatch, 0)
+    call = FakeCall()
+    asyncio.run(recording.cb_plan_set(call, WkPlanSet(idx=1), state))
+    data = asyncio.run(state.get_data())
+    assert data["current_sets"] == [
+        {"weight": Decimal("100.00"), "reps": 5, "seconds": None, "plan_idx": 1}
+    ]
+    assert rows(call.message.sent[-1][1])[0][1] == ("✓ 100x5", WkPlanSet(idx=1).pack())
+
+
+def test_finish_plan_exercise_records_plan_index(monkeypatch):
+    state, _ = _open_plan_exercise(monkeypatch, 2)
+    asyncio.run(recording.cb_plan_set(FakeCall(), WkPlanSet(idx=0), state))
+    asyncio.run(recording.cb_finish_exercise(FakeCall(), state))
+    data = asyncio.run(state.get_data())
+    assert data["exercises"] == [
+        {
+            "exercise_id": 1,
+            "exercise_name": "Bench Press",
+            "sets": [{"weight": Decimal("80.00"), "reps": 10, "seconds": None}],
+            "notes": None,
+            "plan_index": 2,
+        }
+    ]
+    assert plan_todo(data) == [(0, "Bench Press")]
+    assert data["current_plan_index"] is None
+
+
+def test_finish_plan_exercise_without_sets_is_skip(monkeypatch):
+    state, _ = _open_plan_exercise(monkeypatch, 0)
+    call = FakeCall()
+    asyncio.run(recording.cb_finish_exercise(call, state))
+    assert call.alerts == []
+    assert asyncio.run(state.get_state()) == WorkoutSession.active
+    data = asyncio.run(state.get_data())
+    assert data["exercises"] == []
+    assert plan_todo(data) == [(0, "Bench Press"), (2, "Bench Press")]
+
+
+def test_done_plan_exercise_button_is_ignored(monkeypatch):
+    state, _ = _open_plan_exercise(monkeypatch, 0)
+    asyncio.run(recording.cb_plan_set(FakeCall(), WkPlanSet(idx=0), state))
+    asyncio.run(recording.cb_finish_exercise(FakeCall(), state))
+    again = FakeCall()
+    asyncio.run(recording.cb_plan_exercise(again, WkPlanEx(index=0), state, None, USER))
+    assert asyncio.run(state.get_state()) == WorkoutSession.active
+    assert again.message.sent == []
+
+
+def test_free_exercise_after_cancelled_plan_one_has_no_plan(monkeypatch):
+    state, _ = _open_plan_exercise(monkeypatch, 0)
+    asyncio.run(recording.cb_cancel_exercise(FakeCall(), state))
+    data = asyncio.run(state.get_data())
+    assert data["current_plan_index"] is None
+    assert data["current_plan_sets"] is None
+
+
+def test_next_exercise_starts_without_previous_sets(monkeypatch):
+    """MemoryStorage не копирует вложенные списки: сброс упражнения не должен
+    класть в черновик общий объект, иначе подходы переедут к следующему."""
+    state = FSMContext(
+        storage=MemoryStorage(), key=StorageKey(bot_id=1, chat_id=1, user_id=1)
+    )
+    asyncio.run(_day_started(monkeypatch, state))
+    open_ex = recording.cb_plan_exercise
+    asyncio.run(open_ex(FakeCall(), WkPlanEx(index=0), state, None, USER))
+    asyncio.run(recording.cb_plan_set(FakeCall(), WkPlanSet(idx=0), state))
+    asyncio.run(recording.cb_finish_exercise(FakeCall(), state))
+    asyncio.run(open_ex(FakeCall(), WkPlanEx(index=2), state, None, USER))
+    assert asyncio.run(state.get_data())["current_sets"] == []

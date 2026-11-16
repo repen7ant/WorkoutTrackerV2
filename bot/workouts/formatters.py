@@ -52,15 +52,26 @@ def format_sets_prompt(exercise_name: str | None = None) -> str:
 
 
 def format_current_sets(
-    exercise_name: str, notes: str | None, sets: list[SetEntry]
+    exercise_name: str,
+    notes: str | None,
+    sets: list[SetEntry],
+    plan_line: str | None = None,
+    hint: str | None = None,
 ) -> str:
     lines = [f"<b>{escape(exercise_name)}</b>"]
+    if plan_line is not None:
+        lines.append(f"Plan: {plan_line}")
+    if hint:
+        lines.append(f"Tip: {escape(hint)}")
     if notes:
         lines.append(f"<i>{escape(notes)}</i>")
     lines.append("")
     if sets:
         lines.extend([*format_set_lines(sets, indent=""), ""])
-    lines.append("Enter next set, a note, or finish exercise:")
+    if plan_line is not None:
+        lines.append("Tap a planned set once done, or enter a set or a note:")
+    else:
+        lines.append("Enter next set, a note, or finish exercise:")
     return "\n".join(lines)
 
 

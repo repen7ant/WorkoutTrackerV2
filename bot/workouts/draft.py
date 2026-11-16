@@ -13,6 +13,9 @@
           "deleted": bool, "sets": [set]}] — план дня, копия: программу
           могут заменить, пока идёт тренировка
   exercises[].plan_index: int — пункт плана, по которому сделано упражнение
+  current_plan_index, current_plan_sets, current_plan_hint — то же для
+          упражнения, которое вводят сейчас; current_sets[].plan_idx —
+          плановый подход, отмеченный галочкой
 
 Ключи seconds, notes, started_at и finished_at появились позже: в черновиках,
 начатых раньше, их нет, и такие черновики должны сохраняться так же.
@@ -91,6 +94,17 @@ def plan_todo(data: dict[str, Any]) -> list[tuple[int, str]]:
         for i, (name, status) in enumerate(plan_statuses(data) or [])
         if status == "todo"
     ]
+
+
+def toggle_plan_set(
+    current_sets: list[dict[str, Any]], plan_sets: list[dict[str, Any]], idx: int
+) -> None:
+    """Галочка у планового подхода idx: ставит его в конец или снимает."""
+    for i, s in enumerate(current_sets):
+        if s.get("plan_idx") == idx:
+            del current_sets[i]
+            return
+    current_sets.append({**plan_sets[idx], "plan_idx": idx})
 
 
 def workout_times(data: dict[str, Any], utc_offset: int) -> tuple[time, time] | None:
