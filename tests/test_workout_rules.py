@@ -25,8 +25,8 @@ from bot.workouts.draft import (
     workout_times,
     workout_today,
 )
-from bot.workouts.handlers.recording import is_note, parse_set
 from bot.workouts.service import check_deleted_entries
+from bot.workouts.set_parse import is_note, parse_set
 
 CYR_X = "\u0445"  # русская «х»
 CYR_S = "\u0441"  # русская «с» — секунды
