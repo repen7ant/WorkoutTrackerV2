@@ -54,3 +54,29 @@ def test_update_reports_workout_deleted_meanwhile(monkeypatch):
 
     assert asyncio.run(service.update_workout(session, 1, record)) is False
     assert not session.committed
+
+
+class RecordingRepo:
+    added = None
+
+    def __init__(self, session):
+        pass
+
+    async def add(self, record, names, program_day=None):
+        RecordingRepo.added = (record, names, program_day)
+        return 5
+
+
+def test_record_workout_passes_program_day(monkeypatch):
+    monkeypatch.setattr(service, "WorkoutRepository", RecordingRepo)
+    monkeypatch.setattr(service, "_catalog_names", bench_names)
+    session = FakeSession()
+    record = WorkoutRecord.create(
+        1, date(2026, 10, 30), None, [ExerciseEntry.create(7, BENCH)]
+    )
+    workout_id = asyncio.run(
+        service.record_workout(session, record, program_day="Pull")
+    )
+    assert workout_id == 5
+    assert RecordingRepo.added == (record, {7: "Bench Press"}, "Pull")
+    assert session.committed

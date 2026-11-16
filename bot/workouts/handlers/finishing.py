@@ -3,14 +3,17 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
 
+import structlog
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog.typing import FilteringBoundLogger
 
 from bot.common.formatting import format_workout_time
+from bot.programs.service import advance
 from bot.users.models import User
 from bot.workouts.domain import InvalidWorkout
 from bot.workouts.draft import build_record, utc_now_iso, workout_today
@@ -32,6 +35,7 @@ from bot.workouts.service import ExerciseNotAvailable, record_workout
 from bot.workouts.states import WorkoutSession
 
 router = Router(name="workout_finishing")
+logger: FilteringBoundLogger = structlog.get_logger()
 
 DATE_PROMPT = "Choose workout date:"
 NOTES_PROMPT = "Add notes or skip:"
@@ -92,8 +96,9 @@ async def _save(
         await call.answer()
         return
     try:
-        record = build_record(user.id, await state.get_data(), user.utc_offset)
-        await record_workout(session, record)
+        data = await state.get_data()
+        record = build_record(user.id, data, user.utc_offset)
+        await record_workout(session, record, data.get("program_day"))
     except ExerciseNotAvailable:
         await _restore_kb(call, restore_kb)
         await call.answer(
@@ -116,6 +121,26 @@ async def _save(
     when = format_workout_time(record.start_time, record.end_time)
     await call.message.answer(f"Workout saved: {record.date:%d-%m-%y}{when}.")
     await call.answer()
+    if "program_id" in data:
+        await _advance_program(session, user, data)
+
+
+async def _advance_program(
+    session: AsyncSession, user: User, data: dict[str, Any]
+) -> None:
+    """
+    Следующий день программы. Тренировка уже сохранена и черновик очищен:
+    ошибка здесь не должна просить «попробовать снова» — это сохранило бы
+    тренировку второй раз. Не сдвинулась ротация — бот предложит тот же день.
+    """
+    try:
+        await advance(
+            session, user.id, data["program_id"], data["program_day_position"]
+        )
+    except SQLAlchemyError as e:
+        await logger.awarning(
+            "Program rotation not advanced", user_id=user.id, error=repr(e)
+        )
 
 
 async def _restore_kb(call: CallbackQuery, kb: InlineKeyboardMarkup) -> None:

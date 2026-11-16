@@ -191,7 +191,7 @@ def test_yes_dates_the_workout_by_finish():
 
 
 def test_save_message_shows_workout_time(monkeypatch):
-    async def fake_record_workout(session, record):
+    async def fake_record_workout(session, record, program_day=None):
         return 1
 
     monkeypatch.setattr(finishing, "record_workout", fake_record_workout)
@@ -234,3 +234,77 @@ def test_finish_records_end_time():
     asyncio.run(finishing.cb_finish(FakeCall(msg), state, user))
     finished_at = asyncio.run(state.get_data())["finished_at"]
     assert datetime.fromisoformat(finished_at).tzinfo is not None
+
+
+PROGRAM_DRAFT = {
+    **DRAFT,
+    "program_id": 7,
+    "program_day": "Pull",
+    "program_day_position": 2,
+}
+SAVING_USER = User(
+    id=1,
+    ask_workout_date=True,
+    ask_workout_notes=True,
+    exercise_log_size=10,
+    utc_offset=180,
+)
+
+
+def _save_program_workout(monkeypatch, draft, record_error=None, advance_error=None):
+    calls = {"recorded": None, "advanced": []}
+
+    async def fake_record_workout(session, record, program_day=None):
+        if record_error is not None:
+            raise record_error
+        calls["recorded"] = program_day
+        return 1
+
+    async def fake_advance(session, user_id, program_id, done_position):
+        if advance_error is not None:
+            raise advance_error
+        calls["advanced"].append((user_id, program_id, done_position))
+
+    monkeypatch.setattr(finishing, "record_workout", fake_record_workout)
+    monkeypatch.setattr(finishing, "advance", fake_advance)
+    msg = FakeMessage(format_confirm(draft), confirm_save_kb())
+    state = make_state(WorkoutSession.confirming)
+    asyncio.run(state.set_data(draft))
+    asyncio.run(finishing.cb_save(FakeCall(msg), state, None, SAVING_USER))
+    return calls, msg, state
+
+
+def test_save_records_day_and_advances_rotation(monkeypatch):
+    calls, msg, state = _save_program_workout(monkeypatch, PROGRAM_DRAFT)
+    assert calls == {"recorded": "Pull", "advanced": [(1, 7, 2)]}
+    assert msg.answers[-1].startswith("Workout saved")
+    assert asyncio.run(state.get_state()) is None
+
+
+def test_save_failure_does_not_advance(monkeypatch):
+    from bot.workouts.domain import InvalidWorkout
+
+    calls, _, state = _save_program_workout(
+        monkeypatch, PROGRAM_DRAFT, record_error=InvalidWorkout("bad")
+    )
+    assert calls["advanced"] == []
+    assert asyncio.run(state.get_state()) == WorkoutSession.confirming
+
+
+def test_free_workout_does_not_advance(monkeypatch):
+    calls, _, _ = _save_program_workout(monkeypatch, DRAFT)
+    assert calls == {"recorded": None, "advanced": []}
+
+
+def test_rotation_error_keeps_saved_workout(monkeypatch):
+    """Тренировка уже сохранена: «try again» сохранило бы её второй раз."""
+    from sqlalchemy.exc import OperationalError
+
+    calls, msg, state = _save_program_workout(
+        monkeypatch,
+        PROGRAM_DRAFT,
+        advance_error=OperationalError("UPDATE", {}, Exception("db down")),
+    )
+    assert calls["recorded"] == "Pull"
+    assert msg.answers[-1].startswith("Workout saved")
+    assert asyncio.run(state.get_state()) is None

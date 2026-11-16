@@ -25,15 +25,24 @@ class WorkoutRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def add(self, record: WorkoutRecord, names: dict[int, str]) -> int:
+    async def add(
+        self,
+        record: WorkoutRecord,
+        names: dict[int, str],
+        program_day: str | None = None,
+    ) -> int:
         """names — названия упражнений по id: они сохраняются вместе с
-        тренировкой и переживают удаление упражнения из каталога."""
+        тренировкой и переживают удаление упражнения из каталога.
+
+        program_day — не часть WorkoutRecord: replace его не трогает, и правка
+        тренировки день программы не стирает."""
         workout = Workout(
             user_id=record.user_id,
             date=record.date,
             notes=record.notes,
             start_time=record.start_time,
             end_time=record.end_time,
+            program_day=program_day,
         )
         self.session.add(workout)
         await self.session.flush()
@@ -222,6 +231,7 @@ class WorkoutRepository:
                     exercises=[],
                     start_time=workout.start_time,
                     end_time=workout.end_time,
+                    program_day=workout.program_day,
                 )
             if we.id not in entries:
                 entries[we.id] = LoggedExercise(

@@ -176,6 +176,7 @@ class LoggedWorkout:
     exercises: list[LoggedExercise]
     start_time: time | None = None
     end_time: time | None = None
+    program_day: str | None = None  # день программы, по которому записана
 
 
 def duration_minutes(start: time, end: time) -> int:
