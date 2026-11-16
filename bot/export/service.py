@@ -22,6 +22,7 @@ class ExportWorkout(TypedDict):
     notes: str | None
     exercises: list[ExportExercise]
     program_day: NotRequired[str | None]
+    program_week: NotRequired[int | None]
 
 
 async def collect_workouts(
@@ -50,6 +51,7 @@ async def collect_workouts(
             end_time=w.end_time,
             notes=w.notes,
             program_day=w.program_day,
+            program_week=w.program_week,
             exercises=[
                 ExportExercise(
                     name=ex.name,

@@ -47,10 +47,11 @@ PLAN_VERSUS_ACTUAL = """\
 
 RESTRUCTURING = """\
 {n}. Program restructuring
-   Building on everything above, propose how to restructure the training program:
+   Building on everything above, design the next training cycle: how many weeks,
    what to keep, what to cut, what to add, how to spread frequency and volume
-   across the week, and where to push weight versus reps. Give concrete numbers
-   (sets, reps, weights) for the next training cycle."""
+   across the week, and how weights and reps progress from week to week, with a
+   deload where it makes sense. Give concrete numbers (sets, reps, weights) for
+   every week."""
 
 OUTPUT = f"""\
 ## OUTPUT
@@ -95,6 +96,7 @@ def build_ai_prompt(
     wishes: str | None = None,
     program_text: str | None = None,
     available: dict[str, list[str]] | None = None,
+    program_progress: str | None = None,
 ) -> str:
     """available — весь каталог пользователя: название -> мышцы."""
     range_from = date_from or workouts[0]["date"]
@@ -128,7 +130,7 @@ def build_ai_prompt(
     ]
     if has_days:
         lines += [
-            "- A `day:` part names the program day the workout followed"
+            "- A `day:` part names the program day (and week) the workout followed"
             + (" (see CURRENT PROGRAM)." if program_text else "."),
         ]
     lines += [
@@ -168,12 +170,15 @@ def build_ai_prompt(
         lines += [
             "",
             "## CURRENT PROGRAM",
-            "The program the athlete follows now. Its days are trained in rotation.",
+            "The program the athlete follows now: the same days every week, numbers",
+            "per week, weeks advance as their days get done or skipped.",
             "",
             "```",
             program_text,
             "```",
         ]
+        if program_progress:
+            lines += ["", f"Progress: {program_progress}"]
 
     lines.extend(["", "## DATA"])
     for workout in workouts:
@@ -183,6 +188,8 @@ def build_ai_prompt(
             header += f" {start:%H:%M}–{end:%H:%M} ({duration_minutes(start, end)} min)"
         if workout.get("program_day"):
             header += f" | day: {workout['program_day']}"
+            if workout.get("program_week"):
+                header += f" (week {workout['program_week']})"
         if workout["notes"]:
             header += f" | notes: {_one_line(workout['notes'])}"
         lines.append(header)

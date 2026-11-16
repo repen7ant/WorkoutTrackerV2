@@ -257,3 +257,24 @@ def test_skip_clears_wishes(export):
     assert "## ATHLETE REQUESTS" not in prompt
     assert user.ai_wishes is None
     assert session.commits == 1
+
+
+def test_prompt_program_progress():
+    prompt = _prompt(
+        program_text=PROGRAM_TEXT,
+        program_progress="Week 2 of 4 · 5 of 12 sessions done",
+    )
+    section = _section(prompt, "## CURRENT PROGRAM")
+    assert "Progress: Week 2 of 4 · 5 of 12 sessions done" in section
+
+
+def test_day_with_week_in_header():
+    workout = _workout(program_day="Pull", notes="tired")
+    workout["program_week"] = 2
+    lines = _prompt(workouts=[workout], program_text=PROGRAM_TEXT).splitlines()
+    assert "2026-01-01 | day: Pull (week 2) | notes: tired" in lines
+
+
+def test_restructuring_asks_for_a_cycle_of_weeks():
+    task = _section(_prompt(), "## TASK")
+    assert "weeks" in task.split("Program restructuring", 1)[1]

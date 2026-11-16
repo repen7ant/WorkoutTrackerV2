@@ -6,6 +6,7 @@ import pytest
 from bot.catalog.api import ExerciseInfo, match_names
 from bot.programs import service
 from bot.programs.domain import PlanDay, PlanExercise, ProgramPlan
+from bot.programs.formatters import format_progress
 from bot.programs.repository import StoredDay, StoredExercise, StoredProgram
 from bot.workouts.domain import SetEntry
 
@@ -163,3 +164,21 @@ def test_import_saves_catalog_names(monkeypatch):
 def test_import_rejects_unavailable_exercise(monkeypatch, exercise_ids):
     with pytest.raises(service.ExerciseNotAvailable):
         _import(monkeypatch, _plan(["Bench Press", "Squat"]), exercise_ids)
+
+
+@pytest.mark.parametrize(
+    ("done", "text"),
+    [
+        ({}, "Week 1 of 2 · 0 of 3 sessions done"),
+        (
+            {(1, 1): False, (1, 2): True},
+            "Week 2 of 2 · 1 of 3 sessions done, 1 skipped",
+        ),
+        (
+            {(1, 1): False, (1, 2): True, (2, 1): False},
+            "Finished · 2 of 3 sessions done, 1 skipped",
+        ),
+    ],
+)
+def test_format_progress(done, text):
+    assert format_progress(_stored(done)) == text

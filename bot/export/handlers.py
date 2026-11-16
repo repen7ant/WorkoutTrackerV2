@@ -14,7 +14,7 @@ from bot.export.prompt import build_ai_prompt
 from bot.export.service import catalog_exercises, collect_workouts
 from bot.export.states import ExportStates
 from bot.filters import ExState
-from bot.programs.formatters import render_program
+from bot.programs.formatters import format_progress, render_program
 from bot.programs.parser import PROGRAM_MARKER
 from bot.programs.service import get_program
 from bot.users.models import User
@@ -173,6 +173,7 @@ async def _send_export(
         today,
         wishes=user.ai_wishes,
         program_text=render_program(program.days) if program else None,
+        program_progress=format_progress(program) if program else None,
         available=await catalog_exercises(session, user.id),
     )
     await say(f"Workout log — {label}.")

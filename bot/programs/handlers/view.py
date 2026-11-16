@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.common.formatting import escape
 from bot.common.keyboards import yes_no_kb
-from bot.programs.formatters import render_program
+from bot.programs.formatters import format_progress, render_program
 from bot.programs.keyboards import program_kb
 from bot.programs.service import delete_program, get_program
 from bot.users.models import User
@@ -29,15 +29,18 @@ async def cmd_program(message: Message, session: AsyncSession, db_user: User) ->
         await message.answer(NO_PROGRAM)
         return
     text = render_program(program.days)
+    progress = format_progress(program)
     if len(escape(text)) > MAX_MESSAGE_LENGTH:
         await message.answer_document(
             BufferedInputFile(text.encode("utf-8"), filename="program.txt"),
-            caption="Your program.",
+            caption=progress,
             reply_markup=program_kb(),
         )
         return
     await message.answer(
-        f"<pre>{escape(text)}</pre>", parse_mode="HTML", reply_markup=program_kb()
+        f"{progress}\n<pre>{escape(text)}</pre>",
+        parse_mode="HTML",
+        reply_markup=program_kb(),
     )
 
 

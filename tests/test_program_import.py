@@ -348,6 +348,8 @@ def test_start_explains_the_cycle():
     text = msg.sent[-1].text
     for part in ("/workout", "/export", "# PROGRAM", "/program", "/settings"):
         assert part in text
+    assert "week by week" in text
+    assert "When the program ends" in text
 
 
 @pytest.fixture
@@ -395,7 +397,9 @@ def test_program_shows_it_in_import_format(stored):
     asyncio.run(view.cmd_program(msg, None, USER))
     sent = msg.sent[-1]
     assert sent.text == (
-        "<pre>" + escape(render_program(stored["program"].days)) + "</pre>"
+        "Week 1 of 1 · 0 of 2 sessions done\n<pre>"
+        + escape(render_program(stored["program"].days))
+        + "</pre>"
     )
     assert rows(sent.kb) == [[("Delete program", "pg_delete")]]
 

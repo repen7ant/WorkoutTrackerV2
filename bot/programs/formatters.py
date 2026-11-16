@@ -2,7 +2,9 @@ from collections.abc import Sequence
 from itertools import groupby
 
 from bot.common.formatting import format_set_compact
+from bot.programs.domain import sessions
 from bot.programs.parser import PROGRAM_MARKER
+from bot.programs.repository import StoredProgram
 from bot.workouts.domain import SetEntry
 
 
@@ -34,3 +36,15 @@ def render_program(days: Sequence) -> str:
             lines.append(line)
         blocks.append("\n".join(lines))
     return f"{PROGRAM_MARKER}\n" + "\n\n".join(blocks)
+
+
+def format_progress(program: StoredProgram) -> str:
+    """«Week 2 of 4 · 5 of 12 sessions done, 1 skipped» или «Finished · …»."""
+    all_sessions = sessions(program.days, program.weeks)
+    ahead = [s for s in all_sessions if s not in program.done]
+    skipped = sum(program.done.values())
+    stage = f"Week {ahead[0][0]} of {program.weeks}" if ahead else "Finished"
+    text = (
+        f"{stage} · {len(program.done) - skipped} of {len(all_sessions)} sessions done"
+    )
+    return f"{text}, {skipped} skipped" if skipped else text
