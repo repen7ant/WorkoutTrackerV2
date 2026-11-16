@@ -35,8 +35,9 @@ class Workout(Base):
     # по часам пользователя, до минуты
     start_time: Mapped[time | None] = mapped_column(Time)
     end_time: Mapped[time | None] = mapped_column(Time)
-    # имя дня программы, по которому записана тренировка
+    # день и неделя программы, по которым записана тренировка
     program_day: Mapped[str | None] = mapped_column(String(32))
+    program_week: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class WorkoutExercise(Base):

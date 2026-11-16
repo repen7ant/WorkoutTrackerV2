@@ -8,6 +8,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +17,7 @@ from bot.db.base import Base
 
 class Program(Base):
     """
-    Программа тренировок пользователя — одна активная, без срока
+    Программа тренировок пользователя — одна; дни × недели
     """
 
     __tablename__ = "programs"
@@ -24,10 +25,7 @@ class Program(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), unique=True
     )
-    # позиция дня, который бот предложит следующим
-    next_position: Mapped[int] = mapped_column(
-        SmallInteger, default=1, server_default="1"
-    )
+    weeks: Mapped[int] = mapped_column(SmallInteger, default=1, server_default="1")
 
 
 class ProgramDay(Base):
@@ -71,7 +69,30 @@ class ProgramSet(Base):
     program_exercise_id: Mapped[int] = mapped_column(
         ForeignKey("program_exercises.id", ondelete="CASCADE"), index=True
     )
+    week: Mapped[int] = mapped_column(SmallInteger, default=1, server_default="1")
     position: Mapped[int] = mapped_column(SmallInteger)
     weight: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     reps: Mapped[int | None] = mapped_column(SmallInteger)
     seconds: Mapped[int | None] = mapped_column(SmallInteger)
+
+
+class ProgramSession(Base):
+    """
+    Сессия программы — день недели week — сделана или пропущена.
+    Нет строки — сессия впереди.
+    """
+
+    __tablename__ = "program_sessions"
+    __table_args__ = (
+        UniqueConstraint(
+            "program_id", "week", "day_position", name="program_sessions_once"
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # отдельный индекс не нужен: program_id — первый в UNIQUE
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("programs.id", ondelete="CASCADE")
+    )
+    week: Mapped[int] = mapped_column(SmallInteger)
+    day_position: Mapped[int] = mapped_column(SmallInteger)
+    skipped: Mapped[bool]

@@ -2,7 +2,7 @@
 План в FSM, пока идёт мастер импорта, и текст из .txt-файла.
 
   plan: {"days": [{"name": str, "exercises": [{"name": str,
-         "notes": str | None, "sets": [set_to_fsm]}]}]}
+         "notes": str | None, "weeks": [[set_to_fsm]]}]}]}
 """
 
 from typing import Any
@@ -20,7 +20,7 @@ def plan_to_fsm(plan: ProgramPlan) -> dict[str, Any]:
                     {
                         "name": ex.name,
                         "notes": ex.notes,
-                        "sets": [set_to_fsm(s) for s in ex.sets],
+                        "weeks": [[set_to_fsm(s) for s in week] for week in ex.weeks],
                     }
                     for ex in day.exercises
                 ],
@@ -37,7 +37,9 @@ def plan_from_fsm(data: dict[str, Any]) -> ProgramPlan:
                 day["name"],
                 [
                     PlanExercise.create(
-                        ex["name"], sets_from_fsm(ex["sets"]), ex["notes"]
+                        ex["name"],
+                        [sets_from_fsm(week) for week in ex["weeks"]],
+                        ex["notes"],
                     )
                     for ex in day["exercises"]
                 ],

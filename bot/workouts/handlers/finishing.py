@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.typing import FilteringBoundLogger
 
 from bot.common.formatting import format_workout_time
-from bot.programs.service import advance
+from bot.programs.service import complete_session
 from bot.users.models import User
 from bot.workouts.domain import InvalidWorkout
 from bot.workouts.draft import build_record, utc_now_iso, workout_today
@@ -98,7 +98,9 @@ async def _save(
     try:
         data = await state.get_data()
         record = build_record(user.id, data, user.utc_offset)
-        await record_workout(session, record, data.get("program_day"))
+        await record_workout(
+            session, record, data.get("program_day"), data.get("program_week")
+        )
     except ExerciseNotAvailable:
         await _restore_kb(call, restore_kb)
         await call.answer(
@@ -122,24 +124,28 @@ async def _save(
     await call.message.answer(f"Workout saved: {record.date:%d-%m-%y}{when}.")
     await call.answer()
     if "program_id" in data:
-        await _advance_program(session, user, data)
+        await _complete_program_session(session, user, data)
 
 
-async def _advance_program(
+async def _complete_program_session(
     session: AsyncSession, user: User, data: dict[str, Any]
 ) -> None:
     """
-    Следующий день программы. Тренировка уже сохранена и черновик очищен:
+    Сессия программы сделана. Тренировка уже сохранена и черновик очищен:
     ошибка здесь не должна просить «попробовать снова» — это сохранило бы
-    тренировку второй раз. Не сдвинулась ротация — бот предложит тот же день.
+    тренировку второй раз. Не отметилась — бот предложит этот день снова.
     """
     try:
-        await advance(
-            session, user.id, data["program_id"], data["program_day_position"]
+        await complete_session(
+            session,
+            user.id,
+            data["program_id"],
+            data["program_week"],
+            data["program_day_position"],
         )
     except SQLAlchemyError as e:
         await logger.awarning(
-            "Program rotation not advanced", user_id=user.id, error=repr(e)
+            "Program session not completed", user_id=user.id, error=repr(e)
         )
 
 

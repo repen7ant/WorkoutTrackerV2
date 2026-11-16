@@ -12,10 +12,12 @@ from bot.programs.domain import (
     MAX_DAY_NAME,
     MAX_DAYS,
     MAX_EXERCISE_SETS,
+    MAX_WEEKS,
     InvalidProgram,
     PlanDay,
     PlanExercise,
     ProgramPlan,
+    different_weeks,
 )
 from bot.workouts.domain import MAX_EXERCISE_NOTES, SetEntry
 from bot.workouts.set_parse import parse_set
@@ -26,22 +28,27 @@ FORMAT_DESCRIPTION = f"""\
 ```
 {PROGRAM_MARKER}
 == Day name ==
-Exercise name: 100x5, 100x5, 100x5 | notes: rest 3 min
-Exercise name: BWx12, BWx12, BWx12
-Exercise name: BWx1:30, BWx1:30
+Exercise name: 100x5x3 / 102.5x5x3 / 105x5x3 / 90x5x2 | notes: rest 3 min
+Exercise name: BWx10x3 / BWx12x3 / BWx12x4 / -
+Exercise name: BWx1:00, BWx1:30 / BWx1:30x2 / BWx1:45x2 / BWx1:00
 ```
 
 - The block starts with the line `{PROGRAM_MARKER}`.
-- `== Day name ==` starts a training day. Days are trained in rotation, in the
-  order listed: {MAX_DAYS} days at most, unique names of up to {MAX_DAY_NAME}
-  characters.
-- One line per exercise: the name, a colon, then every set as weight x reps,
-  separated by commas, in the order they are performed: up to
-  {MAX_DAY_EXERCISES} exercises per day and {MAX_EXERCISE_SETS} sets per exercise.
+- The program is a cycle of 1-{MAX_WEEKS} weeks with the same training days every
+  week. Give a progression across the weeks and a deload where it makes sense.
+- `== Day name ==` starts a training day: {MAX_DAYS} days at most, unique names of
+  up to {MAX_DAY_NAME} characters. Days of a week can be trained in any order.
+- One line per exercise: the name, a colon, then the sets for each week,
+  separated by ` / `. Every exercise lists the same number of weeks: that is
+  the length of the program. `-` means the exercise is not done that week.
+- Sets of a week are separated by commas, in the order they are performed:
+  weight x reps, and `x3` at the end for 3 identical sets (`100x5x3`). Up to
+  {MAX_DAY_EXERCISES} exercises per day and {MAX_EXERCISE_SETS} sets per exercise
+  per week.
 - Weight is in kilograms; `BW` means bodyweight only. A time in place of reps
   (`1:30`, minutes:seconds) makes a timed set.
 - Exact numbers only: one fixed weight and rep count per set. No rep ranges
-  (8-12), no RPE or percentages, no weeks or progression schemes.
+  (8-12), no RPE or percentages.
 - `| notes:` is optional: a rest time or technique cue on the same line, up to
   {MAX_EXERCISE_NOTES} characters. A variation (paused, incline) is a separate
   exercise with its own name, not a note.
@@ -50,8 +57,10 @@ Exercise name: BWx1:30, BWx1:30
 _DAY = re.compile(r"==+(.*?)==+")
 # подход и запятая после него; делить строку по запятым нельзя — вес бывает
 # с запятой: «102,5x5»
+# «x3» в конце — три одинаковых подхода
 _SET = re.compile(
-    r"\s*((?:BW|\d+(?:[.,]\d+)?)\s*[XХ]\s*(?:\d+:\d\d|\d+[SС]?))\s*(?:,|$)",
+    r"\s*(?P<set>(?:BW|\d+(?:[.,]\d+)?)\s*[XХ]\s*(?:\d+:\d\d|\d+[SС]?))"
+    r"(?:\s*[XХ]\s*(?P<count>\d+))?\s*(?:,|$)",
     re.IGNORECASE,
 )
 _NOTES = re.compile(r"\s*notes:(.*)", re.IGNORECASE)
@@ -74,13 +83,30 @@ def _parse_sets(text: str) -> list[SetEntry]:
         if m is None:
             piece = text[pos:].split(",")[0].strip()
             raise InvalidProgram(f'can\'t parse set "{piece}"')
-        token = re.sub(r"\s+", "", m[1])
+        token = re.sub(r"\s+", "", m["set"])
         entry = parse_set(token)
         if entry is None:
             raise InvalidProgram(f'invalid set "{token}"')
-        sets.append(entry)
+        count = int(m["count"]) if m["count"] else 1
+        if not 1 <= count <= MAX_EXERCISE_SETS:
+            whole = re.sub(r"\s+", "", m[0]).rstrip(",")
+            raise InvalidProgram(f'invalid set count "{whole}"')
+        sets.extend([entry] * count)
         pos = m.end()
     return sets
+
+
+def _parse_weeks(text: str) -> list[list[SetEntry]]:
+    weeks = []
+    for n, week in enumerate(text.split("/"), start=1):
+        week = week.strip()
+        if week == "-":
+            weeks.append([])
+        elif not week:
+            raise InvalidProgram(f'week {n} has no sets (use "-" to skip a week)')
+        else:
+            weeks.append(_parse_sets(week))
+    return weeks
 
 
 def _parse_exercise(line: str) -> PlanExercise:
@@ -96,7 +122,7 @@ def _parse_exercise(line: str) -> PlanExercise:
     split = colons[-1] if colons else main.find(":")
     if split < 0:
         raise InvalidProgram(f'expected "Exercise: sets", got "{line}"')
-    return PlanExercise.create(main[:split], _parse_sets(main[split + 1 :]), notes)
+    return PlanExercise.create(main[:split], _parse_weeks(main[split + 1 :]), notes)
 
 
 def _add_day(
@@ -125,6 +151,8 @@ def parse_program(text: str) -> ProgramPlan:
     days: list[PlanDay] = []
     day_line, day_name = 0, None
     exercises: list[PlanExercise] = []
+    # длина программы — по первому упражнению
+    weeks: int | None = None
     for number, line in numbered[1:]:
         if m := _DAY.fullmatch(line):
             if day_name is not None:
@@ -134,9 +162,16 @@ def parse_program(text: str) -> ProgramPlan:
         if day_name is None:
             raise ProgramParseError(number, "exercise before the first day")
         try:
-            exercises.append(_parse_exercise(line))
+            exercise = _parse_exercise(line)
         except InvalidProgram as e:
             raise ProgramParseError(number, str(e)) from None
+        if weeks is None:
+            weeks = len(exercise.weeks)
+        elif len(exercise.weeks) != weeks:
+            raise ProgramParseError(
+                number, different_weeks(exercise.name, len(exercise.weeks), weeks)
+            )
+        exercises.append(exercise)
     if day_name is not None:
         _add_day(days, day_line, day_name, exercises)
 

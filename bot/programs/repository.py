@@ -1,11 +1,18 @@
 from dataclasses import dataclass
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import ExerciseInfo
 from bot.programs.domain import ProgramPlan
-from bot.programs.models import Program, ProgramDay, ProgramExercise, ProgramSet
+from bot.programs.models import (
+    Program,
+    ProgramDay,
+    ProgramExercise,
+    ProgramSession,
+    ProgramSet,
+)
 from bot.workouts.domain import SetEntry
 
 
@@ -14,7 +21,8 @@ class StoredExercise:
     exercise_id: int | None  # None — упражнение удалено из каталога
     name: str
     notes: str | None
-    sets: list[SetEntry]
+    # подходы на каждую неделю; пусто — на этой неделе упражнения нет
+    weeks: list[list[SetEntry]]
 
 
 @dataclass(frozen=True)
@@ -27,8 +35,10 @@ class StoredDay:
 @dataclass(frozen=True)
 class StoredProgram:
     id: int
-    next_position: int
+    weeks: int
     days: list[StoredDay]
+    # (неделя, позиция дня) -> пропущена ли; нет ключа — сессия впереди
+    done: dict[tuple[int, int], bool]
 
 
 class ProgramRepository:
@@ -49,7 +59,10 @@ class ProgramRepository:
             .join(ProgramSet, ProgramSet.program_exercise_id == ProgramExercise.id)
             .where(ProgramDay.program_id == program.id)
             .order_by(
-                ProgramDay.position, ProgramExercise.position, ProgramSet.position
+                ProgramDay.position,
+                ProgramExercise.position,
+                ProgramSet.week,
+                ProgramSet.position,
             )
         )
         days: dict[int, StoredDay] = {}
@@ -64,14 +77,22 @@ class ProgramRepository:
                     exercise_id=ex.exercise_id,
                     name=ex.exercise_name,
                     notes=ex.notes,
-                    sets=[],
+                    weeks=[[] for _ in range(program.weeks)],
                 )
                 days[day.id].exercises.append(exercises[ex.id])
-            exercises[ex.id].sets.append(
+            exercises[ex.id].weeks[s.week - 1].append(
                 SetEntry(weight=s.weight, reps=s.reps, seconds=s.seconds)
             )
+        sessions = await self.session.execute(
+            select(
+                ProgramSession.week, ProgramSession.day_position, ProgramSession.skipped
+            ).where(ProgramSession.program_id == program.id)
+        )
         return StoredProgram(
-            id=program.id, next_position=program.next_position, days=list(days.values())
+            id=program.id,
+            weeks=program.weeks,
+            days=list(days.values()),
+            done={(week, pos): skipped for week, pos, skipped in sessions.tuples()},
         )
 
     async def replace(
@@ -81,9 +102,9 @@ class ProgramRepository:
         Новая программа вместо старой. exercises — упражнение каталога по
         casefold() названия из плана; название сохраняется каталожное.
         """
-        # дни, упражнения и подходы удаляет каскад внешних ключей
+        # дни, упражнения, подходы и сессии удаляет каскад внешних ключей
         await self.delete(user_id)
-        program = Program(user_id=user_id, next_position=1)
+        program = Program(user_id=user_id, weeks=plan.weeks)
         self.session.add(program)
         await self.session.flush()
         for day_pos, day in enumerate(plan.days, start=1):
@@ -104,12 +125,14 @@ class ProgramRepository:
                 self.session.add_all(
                     ProgramSet(
                         program_exercise_id=ex_row.id,
+                        week=week,
                         position=set_pos,
                         weight=s.weight,
                         reps=s.reps,
                         seconds=s.seconds,
                     )
-                    for set_pos, s in enumerate(ex.sets, start=1)
+                    for week, sets in enumerate(ex.weeks, start=1)
+                    for set_pos, s in enumerate(sets, start=1)
                 )
         await self.session.flush()
 
@@ -119,13 +142,33 @@ class ProgramRepository:
         )
         return result.rowcount > 0
 
-    async def set_next_position(
-        self, user_id: int, program_id: int, position: int
+    async def add_session(
+        self,
+        user_id: int,
+        program_id: int,
+        week: int,
+        day_position: int,
+        skipped: bool,
     ) -> bool:
-        """False — программу уже заменили или удалили."""
-        result = await self.session.execute(
-            update(Program)
-            .where(Program.id == program_id, Program.user_id == user_id)
-            .values(next_position=position)
+        """
+        Сессия сделана или пропущена. False — программу уже заменили или
+        удалили. Повтор той же сессии — не ошибка: остаётся первая отметка.
+        """
+        owned = await self.session.scalar(
+            select(Program.id).where(
+                Program.id == program_id, Program.user_id == user_id
+            )
         )
-        return result.rowcount > 0
+        if owned is None:
+            return False
+        await self.session.execute(
+            insert(ProgramSession)
+            .values(
+                program_id=program_id,
+                week=week,
+                day_position=day_position,
+                skipped=skipped,
+            )
+            .on_conflict_do_nothing(constraint="program_sessions_once")
+        )
+        return True

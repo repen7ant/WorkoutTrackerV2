@@ -12,6 +12,7 @@ class ExerciseChoice(CallbackData, prefix="wk_ex"):
 
 
 class WkDay(CallbackData, prefix="wk_day"):
+    week: int
     position: int
 
 
@@ -20,20 +21,20 @@ class WkPlanEx(CallbackData, prefix="wk_plan_ex"):
 
 
 def day_choice_kb(
-    days: list[tuple[int, str]], next_position: int
+    week: int, days: list[tuple[int, str]], next_position: int
 ) -> InlineKeyboardMarkup:
-    """Следующий по ротации день — первой кнопкой, остальные — по два в ряд."""
+    """Дни недели week: следующий — первой кнопкой, остальные — по два в ряд."""
     positions = [pos for pos, _ in days]
     if next_position not in positions:
         next_position = positions[0]
     builder = InlineKeyboardBuilder()
     builder.button(
         text=f"▶ Start {dict(days)[next_position]}",
-        callback_data=WkDay(position=next_position),
+        callback_data=WkDay(week=week, position=next_position),
     )
     others = [(pos, name) for pos, name in days if pos != next_position]
     for pos, name in others:
-        builder.button(text=name, callback_data=WkDay(position=pos))
+        builder.button(text=name, callback_data=WkDay(week=week, position=pos))
     builder.button(text="Free workout", callback_data="wk_free")
     builder.adjust(1, *[2] * (len(others) // 2), *[1] * (len(others) % 2), 1)
     return builder.as_markup()

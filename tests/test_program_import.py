@@ -44,7 +44,7 @@ def test_plan_fsm_round_trip():
     plan = parse_program(PROGRAM)
     stored = fsm_json.loads(fsm_json.dumps(plan_to_fsm(plan)))
     assert plan_from_fsm(stored) == plan
-    assert plan_from_fsm(stored).days[0].exercises[0].sets[1].weight == Decimal(
+    assert plan_from_fsm(stored).days[0].exercises[0].weeks[0][1].weight == Decimal(
         "102.50"
     )
 
@@ -242,7 +242,7 @@ def test_wizard_asks_unmatched_then_saves(wizard):
         import_.cb_pick(call, ImportPick(exercise_id=3, left=1), state, None, USER)
     )
     summary = call.message.sent[-1]
-    assert summary.text == "Program: 2 days — Push (2), Pull (2).\nSave it?"
+    assert summary.text == "Program: 1 week, 2 days — Push (2), Pull (2).\nSave it?"
     assert rows(summary.kb) == rows(confirm_kb(replacing=False))
 
     save = FakeCall(FakeMessage())
@@ -305,7 +305,20 @@ def test_create_new_adds_exercise(wizard, monkeypatch):
     asyncio.run(import_.on_muscles(msg, state, None, USER))
     assert created["args"] == ("Romanian Deadlift", 42, ["Hamstrings", "Glutes"])
     assert asyncio.run(state.get_data())["matched"]["romanian deadlift"] == 7
-    assert msg.sent[-1].text.startswith("Program: 2 days")
+    assert msg.sent[-1].text.startswith("Program: 1 week, 2 days")
+
+
+def test_import_summary_with_weeks(wizard):
+    state, _ = wizard
+    text = (
+        "# PROGRAM\n== Push ==\nBench Press: 100x5 / 102.5x5 / 105x5\n"
+        "Plank: BWx1:00 / BWx1:15 / -\n== Pull ==\nRDL: 80x8 / 85x8 / 90x8\n"
+    )
+    msg = FakeMessage(text)
+    asyncio.run(import_.on_program_text(msg, state, None, USER))
+    assert (
+        msg.sent[-1].text == "Program: 3 weeks, 2 days — Push (2), Pull (1).\nSave it?"
+    )
 
 
 def test_replacing_label_when_program_exists(wizard):
@@ -360,13 +373,13 @@ def _stored_program(text=PROGRAM):
             i,
             day.name,
             [
-                StoredExercise(1, ex.name, ex.notes, list(ex.sets))
+                StoredExercise(1, ex.name, ex.notes, [list(w) for w in ex.weeks])
                 for ex in day.exercises
             ],
         )
         for i, day in enumerate(plan.days, start=1)
     ]
-    return StoredProgram(id=1, next_position=1, days=days)
+    return StoredProgram(id=1, weeks=plan.weeks, days=days, done={})
 
 
 def test_program_without_program_explains_import(stored):

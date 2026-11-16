@@ -30,14 +30,19 @@ async def _catalog_names(
 
 
 async def record_workout(
-    session: AsyncSession, record: WorkoutRecord, program_day: str | None = None
+    session: AsyncSession,
+    record: WorkoutRecord,
+    program_day: str | None = None,
+    program_week: int | None = None,
 ) -> int:
     """
     Сохраняет тренировку, если все её упражнения доступны пользователю.
-    program_day — день программы, по которому она записана.
+    program_day и program_week — день программы, по которому она записана.
     """
     names = await _catalog_names(session, record)
-    workout_id = await WorkoutRepository(session).add(record, names, program_day)
+    workout_id = await WorkoutRepository(session).add(
+        record, names, program_day, program_week
+    )
     await session.commit()
     return workout_id
 

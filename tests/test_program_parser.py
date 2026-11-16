@@ -2,12 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from bot.programs.domain import (
-    PlanDay,
-    PlanExercise,
-    ProgramPlan,
-    next_after,
-)
+from bot.programs.domain import PlanDay, PlanExercise, ProgramPlan, sessions
 from bot.programs.formatters import render_program
 from bot.programs.parser import ProgramParseError, parse_program
 from bot.workouts.domain import SetEntry
@@ -21,34 +16,84 @@ Plank: BWx1:30
 Pull-ups: BWx8, BWx8, BWx8
 """
 
+
+def _ex(name, *weeks, notes=None) -> PlanExercise:
+    return PlanExercise(name, tuple(tuple(week) for week in weeks), notes)
+
+
 EXPECTED = ProgramPlan(
     days=(
         PlanDay(
             "Push",
             (
-                PlanExercise(
+                _ex(
                     "Bench Press",
-                    (
+                    [
                         SetEntry(Decimal("100.00"), 5),
                         SetEntry(Decimal("102.50"), 5),
                         SetEntry(Decimal("102.50"), 4),
-                    ),
-                    "pause at the bottom",
+                    ],
+                    notes="pause at the bottom",
                 ),
-                PlanExercise("Dips", (SetEntry(None, 12), SetEntry(None, 12)), None),
-                PlanExercise("Plank", (SetEntry(None, seconds=90),), None),
+                _ex("Dips", [SetEntry(None, 12)] * 2),
+                _ex("Plank", [SetEntry(None, seconds=90)]),
+            ),
+        ),
+        PlanDay("Pull", (_ex("Pull-ups", [SetEntry(None, 8)] * 3),)),
+    ),
+    weeks=1,
+)
+
+WEEKS = """# PROGRAM
+== Push ==
+Bench Press: 100x5x3 / 102.5x5x3 / 90x5x2 | notes: rest 3 min
+Dips: BWx10x2, BWx8 / BWx12x3 / -
+== Pull ==
+Row: 60x10x3 / 62.5x10x3 / 55x10x2
+"""
+
+WEEKS_EXPECTED = ProgramPlan(
+    days=(
+        PlanDay(
+            "Push",
+            (
+                _ex(
+                    "Bench Press",
+                    [SetEntry(Decimal("100.00"), 5)] * 3,
+                    [SetEntry(Decimal("102.50"), 5)] * 3,
+                    [SetEntry(Decimal("90.00"), 5)] * 2,
+                    notes="rest 3 min",
+                ),
+                _ex(
+                    "Dips",
+                    [SetEntry(None, 10), SetEntry(None, 10), SetEntry(None, 8)],
+                    [SetEntry(None, 12)] * 3,
+                    [],
+                ),
             ),
         ),
         PlanDay(
             "Pull",
-            (PlanExercise("Pull-ups", (SetEntry(None, 8),) * 3, None),),
+            (
+                _ex(
+                    "Row",
+                    [SetEntry(Decimal("60.00"), 10)] * 3,
+                    [SetEntry(Decimal("62.50"), 10)] * 3,
+                    [SetEntry(Decimal("55.00"), 10)] * 2,
+                ),
+            ),
         ),
-    )
+    ),
+    weeks=3,
 )
 
 
-def test_parse_valid_program():
+def test_parse_one_week_is_old_format():
     assert parse_program(PROGRAM) == EXPECTED
+
+
+def test_parse_weeks_with_counts_and_dash():
+    assert parse_program(WEEKS) == WEEKS_EXPECTED
 
 
 def test_parse_crlf_and_blank_lines():
@@ -56,7 +101,7 @@ def test_parse_crlf_and_blank_lines():
         "\r\n  # PROGRAM  \r\n\r\n"
         "==  Push  ==\r\n"
         "Bench Press:100x5,102.5x5,  102,5x4  |  notes:  pause at the bottom  \r\n"
-        "Dips: BWx12, BWx12\r\n"
+        "Dips: BWx12 x 2\r\n"
         "Plank : BW x 1:30 \r\n"
         "\r\n\r\n"
         "== Pull ==\r\n"
@@ -66,10 +111,13 @@ def test_parse_crlf_and_blank_lines():
 
 
 def test_parse_cyrillic_x_and_seconds():
-    plan = parse_program("# PROGRAM\n== A ==\nPlank: BWх45s, 20Х1:00")
-    assert plan.days[0].exercises[0].sets == (
-        SetEntry(None, seconds=45),
-        SetEntry(Decimal("20.00"), seconds=60),
+    plan = parse_program("# PROGRAM\n== A ==\nPlank: BWх45s, 20Х1:00х2")
+    assert plan.days[0].exercises[0].weeks == (
+        (
+            SetEntry(None, seconds=45),
+            SetEntry(Decimal("20.00"), seconds=60),
+            SetEntry(Decimal("20.00"), seconds=60),
+        ),
     )
 
 
@@ -77,7 +125,7 @@ def test_parse_duplicate_exercise_in_day():
     plan = parse_program(
         "# PROGRAM\n== Push ==\nBench Press: 100x5\nDips: BWx10\nBench Press: 80x10"
     )
-    assert [(ex.name, ex.sets[0].reps) for ex in plan.days[0].exercises] == [
+    assert [(ex.name, ex.weeks[0][0].reps) for ex in plan.days[0].exercises] == [
         ("Bench Press", 5),
         ("Dips", 10),
         ("Bench Press", 10),
@@ -85,7 +133,7 @@ def test_parse_duplicate_exercise_in_day():
 
 
 def test_parse_colon_in_exercise_name():
-    plan = parse_program("# PROGRAM\n== A ==\nRow: chest supported: 40x10")
+    plan = parse_program("# PROGRAM\n== A ==\nRow: chest supported: 40x10 / 42.5x10")
     assert plan.days[0].exercises[0].name == "Row: chest supported"
 
 
@@ -125,8 +173,41 @@ def _days(count: int) -> str:
         (
             "# PROGRAM\n== Push ==\nDips: " + ", ".join(["BWx5"] * 11),
             3,
-            "too many sets (max 10)",
+            "too many sets in week 1 (max 10)",
         ),
+        (
+            "# PROGRAM\n== Push ==\nDips: BWx5 / BWx5x6, BWx5x5",
+            3,
+            "too many sets in week 2 (max 10)",
+        ),
+        (
+            "# PROGRAM\n== Push ==\nDips: " + " / ".join(["BWx5"] * 13),
+            3,
+            "too many weeks (max 12)",
+        ),
+        (
+            "# PROGRAM\n== Push ==\nBench: 100x5 / 100x5\nDips: BWx5",
+            4,
+            '"Dips" has 1 week, the program has 2',
+        ),
+        (
+            "# PROGRAM\n== Push ==\nBench: 100x5 / 100x5\n== Pull ==\nRow: 1x1 / - / -",
+            5,
+            '"Row" has 3 weeks, the program has 2',
+        ),
+        ("# PROGRAM\n== Push ==\nDips: - / -", 3, "exercise has no sets in any week"),
+        (
+            "# PROGRAM\n== Push ==\nDips: BWx5 /  / BWx5",
+            3,
+            'week 2 has no sets (use "-" to skip a week)',
+        ),
+        (
+            "# PROGRAM\n== Push ==\nBench Press:",
+            3,
+            'week 1 has no sets (use "-" to skip a week)',
+        ),
+        ("# PROGRAM\n== Push ==\nBench: 100x5x0", 3, 'invalid set count "100x5x0"'),
+        ("# PROGRAM\n== Push ==\nBench: 100x5x11", 3, 'invalid set count "100x5x11"'),
         ("# PROGRAM\n== Push ==\nBench Press: 100x", 3, 'can\'t parse set "100x"'),
         (
             "# PROGRAM\n== Push ==\nBench Press: 100x5, 100x8-12",
@@ -135,7 +216,6 @@ def _days(count: int) -> str:
         ),
         ("# PROGRAM\n== Push ==\nBench Press: 1000x5", 3, 'invalid set "1000x5"'),
         ("# PROGRAM\n== Push ==\nBench Press: 100x0", 3, 'invalid set "100x0"'),
-        ("# PROGRAM\n== Push ==\nBench Press:", 3, "exercise has no sets"),
         (
             "# PROGRAM\n== Push ==\nGood luck!",
             3,
@@ -178,20 +258,35 @@ def test_render_program():
         "# PROGRAM\n"
         "== Push ==\n"
         "Bench Press: 100x5, 102.5x5, 102.5x4 | notes: pause at the bottom\n"
-        "Dips: BWx12, BWx12\n"
+        "Dips: BWx12x2\n"
         "Plank: BWx1:30\n"
         "\n"
         "== Pull ==\n"
-        "Pull-ups: BWx8, BWx8, BWx8"
+        "Pull-ups: BWx8x3"
     )
 
 
-def test_render_round_trip():
-    assert parse_program(render_program(EXPECTED.days)) == EXPECTED
+def test_render_compresses_weeks():
+    assert render_program(WEEKS_EXPECTED.days) == (
+        "# PROGRAM\n"
+        "== Push ==\n"
+        "Bench Press: 100x5x3 / 102.5x5x3 / 90x5x2 | notes: rest 3 min\n"
+        "Dips: BWx10x2, BWx8 / BWx12x3 / -\n"
+        "\n"
+        "== Pull ==\n"
+        "Row: 60x10x3 / 62.5x10x3 / 55x10x2"
+    )
 
 
-@pytest.mark.parametrize(
-    ("position", "count", "expected"), [(1, 3, 2), (2, 3, 3), (3, 3, 1), (1, 1, 1)]
-)
-def test_next_after(position, count, expected):
-    assert next_after(position, count) == expected
+@pytest.mark.parametrize("plan", [EXPECTED, WEEKS_EXPECTED])
+def test_render_round_trip(plan):
+    assert parse_program(render_program(plan.days)) == plan
+
+
+def test_sessions_skip_empty_day_week():
+    """Pull на неделе 2 и Push на неделе 3 без подходов — таких сессий нет."""
+    plan = parse_program(
+        "# PROGRAM\n== Push ==\nBench: 100x5 / 100x5 / -\n"
+        "== Pull ==\nRow: 60x10 / - / 60x10"
+    )
+    assert sessions(plan.days, plan.weeks) == [(1, 1), (1, 2), (2, 1), (3, 2)]

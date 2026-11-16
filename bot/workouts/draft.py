@@ -8,7 +8,8 @@
 
 Тренировка по дню программы — ещё:
 
-  program_id: int, program_day: str, program_day_position: int
+  program_id: int, program_day: str, program_day_position: int,
+  program_week: int
   plan: [{"exercise_id": int | None, "name": str, "notes": str | None,
           "deleted": bool, "sets": [set]}] — план дня, копия: программу
           могут заменить, пока идёт тренировка
@@ -52,13 +53,19 @@ def sets_from_fsm(sets: list[dict[str, Any]]) -> list[SetEntry]:
     ]
 
 
-def seed_plan(data: dict[str, Any], program: "StoredProgram", position: int) -> None:
-    """Кладёт в черновик план дня position."""
+def seed_plan(
+    data: dict[str, Any], program: "StoredProgram", week: int, position: int
+) -> None:
+    """
+    Кладёт в черновик план дня position на неделе week. Упражнения, которых
+    на этой неделе нет, в план не попадают.
+    """
     day = next(d for d in program.days if d.position == position)
     data.update(
         program_id=program.id,
         program_day=day.name,
         program_day_position=position,
+        program_week=week,
         plan=[
             {
                 "exercise_id": ex.exercise_id,
@@ -66,9 +73,10 @@ def seed_plan(data: dict[str, Any], program: "StoredProgram", position: int) -> 
                 "notes": ex.notes,
                 # удалённое из каталога в тренировку не добавить
                 "deleted": ex.exercise_id is None,
-                "sets": [set_to_fsm(s) for s in ex.sets],
+                "sets": [set_to_fsm(s) for s in ex.weeks[week - 1]],
             }
             for ex in day.exercises
+            if ex.weeks[week - 1]
         ],
     )
 

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.catalog.api import MUSCLES_PROMPT, Catalog, parse_muscle_names
 from bot.catalog.service import add_exercise
 from bot.filters import ExState
-from bot.programs.domain import InvalidProgram, ProgramPlan
+from bot.programs.domain import InvalidProgram, ProgramPlan, week_count
 from bot.programs.draft import decode_txt, plan_from_fsm, plan_to_fsm
 from bot.programs.keyboards import (
     IMPORT_PREFIX,
@@ -63,7 +63,10 @@ def _question(name: str) -> str:
 def _summary(plan: ProgramPlan) -> str:
     count = len(plan.days)
     days = ", ".join(f"{day.name} ({len(day.exercises)})" for day in plan.days)
-    return f"Program: {count} day{'s' if count != 1 else ''} — {days}.\nSave it?"
+    return (
+        f"Program: {week_count(plan.weeks)}, {count} day{'s' if count != 1 else ''}"
+        f" — {days}.\nSave it?"
+    )
 
 
 async def _show(

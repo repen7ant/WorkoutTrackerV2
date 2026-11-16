@@ -2,6 +2,7 @@ import asyncio
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -26,23 +27,40 @@ from bot.workouts.keyboards import (
 from bot.workouts.states import WorkoutSession
 
 BENCH_SETS = [SetEntry(Decimal("100.00"), 5), SetEntry(Decimal("100.00"), 5)]
-PROGRAM = StoredProgram(
-    id=7,
-    next_position=2,
-    days=[
-        StoredDay(
-            1,
-            "Push",
-            [
-                StoredExercise(1, "Bench Press", "pause", BENCH_SETS),
-                StoredExercise(None, "Old Fly", None, [SetEntry(None, 12)]),
-                StoredExercise(1, "Bench Press", None, [SetEntry(Decimal("80"), 10)]),
-            ],
-        ),
-        StoredDay(2, "Pull", [StoredExercise(5, "Row", None, [SetEntry(None, 8)])]),
-        StoredDay(3, "Legs", [StoredExercise(6, "Squat", None, [SetEntry(None, 5)])]),
-    ],
-)
+BENCH_WEEK2 = [SetEntry(Decimal("102.50"), 5)] * 3
+
+
+def _program(done=None) -> StoredProgram:
+    """2 недели; второй жим в Push — только на первой."""
+    return StoredProgram(
+        id=7,
+        weeks=2,
+        days=[
+            StoredDay(
+                1,
+                "Push",
+                [
+                    StoredExercise(
+                        1, "Bench Press", "pause", [BENCH_SETS, BENCH_WEEK2]
+                    ),
+                    StoredExercise(None, "Old Fly", None, [[SetEntry(None, 12)]] * 2),
+                    StoredExercise(
+                        1, "Bench Press", None, [[SetEntry(Decimal("80"), 10)], []]
+                    ),
+                ],
+            ),
+            StoredDay(
+                2, "Pull", [StoredExercise(5, "Row", None, [[SetEntry(None, 8)]] * 2)]
+            ),
+            StoredDay(
+                3, "Legs", [StoredExercise(6, "Squat", None, [[SetEntry(None, 5)]] * 2)]
+            ),
+        ],
+        done=done or {},
+    )
+
+
+PROGRAM = _program()
 USER = User(id=42)
 
 
@@ -50,35 +68,39 @@ def rows(kb):
     return [[(b.text, b.callback_data) for b in row] for row in kb.inline_keyboard]
 
 
-def _seeded(position=1) -> dict:
+def _seeded(week=1, position=1) -> dict:
     data = {"exercises": []}
-    seed_plan(data, PROGRAM, position)
+    seed_plan(data, PROGRAM, week, position)
     return fsm_json.loads(fsm_json.dumps(data))
 
 
 def test_day_choice_kb_order():
     days = [(d.position, d.name) for d in PROGRAM.days]
-    assert rows(day_choice_kb(days, next_position=2)) == [
-        [("▶ Start Pull", WkDay(position=2).pack())],
-        [("Push", WkDay(position=1).pack()), ("Legs", WkDay(position=3).pack())],
+    assert rows(day_choice_kb(1, days, next_position=2)) == [
+        [("▶ Start Pull", WkDay(week=1, position=2).pack())],
+        [
+            ("Push", WkDay(week=1, position=1).pack()),
+            ("Legs", WkDay(week=1, position=3).pack()),
+        ],
         [("Free workout", "wk_free")],
     ]
 
 
 def test_day_choice_kb_stale_next_position():
     days = [(d.position, d.name) for d in PROGRAM.days]
-    assert rows(day_choice_kb(days, next_position=9))[0] == [
-        ("▶ Start Push", WkDay(position=1).pack())
+    assert rows(day_choice_kb(2, days, next_position=9))[0] == [
+        ("▶ Start Push", WkDay(week=2, position=1).pack())
     ]
 
 
 def test_seed_plan_marks_deleted():
     data = _seeded()
-    assert (data["program_id"], data["program_day"], data["program_day_position"]) == (
-        7,
-        "Push",
-        1,
-    )
+    assert (
+        data["program_id"],
+        data["program_day"],
+        data["program_day_position"],
+        data["program_week"],
+    ) == (7, "Push", 1, 1)
     assert [(p["name"], p["deleted"]) for p in data["plan"]] == [
         ("Bench Press", False),
         ("Old Fly", True),
@@ -90,6 +112,15 @@ def test_seed_plan_marks_deleted():
         "seconds": None,
     }
     assert plan_todo(data) == [(0, "Bench Press"), (2, "Bench Press")]
+
+
+def test_seed_plan_takes_week_sets():
+    data = _seeded(week=2)
+    assert data["program_week"] == 2
+    # второго жима на неделе 2 нет
+    assert [p["name"] for p in data["plan"]] == ["Bench Press", "Old Fly"]
+    assert len(data["plan"][0]["sets"]) == 3
+    assert data["plan"][0]["sets"][0]["weight"] == Decimal("102.50")
 
 
 def test_plan_statuses_by_plan_index():
@@ -191,14 +222,31 @@ def _with_program(monkeypatch, program):
     monkeypatch.setattr(recording, "get_program", fake_get_program)
 
 
-def test_workout_offers_next_day(monkeypatch):
-    _with_program(monkeypatch, PROGRAM)
+def _offer(monkeypatch, program):
+    _with_program(monkeypatch, program)
     msg, state = FakeMessage("/workout"), _state()
     asyncio.run(recording.cmd_workout(msg, state, None, USER))
-    text, kb = msg.sent[-1]
-    assert text == "Next up: <b>Pull</b>. Start it or pick another day:"
-    assert rows(kb)[0] == [("▶ Start Pull", WkDay(position=2).pack())]
     assert asyncio.run(state.get_state()) is None
+    return msg.sent[-1]
+
+
+def test_workout_offers_next_session_of_week(monkeypatch):
+    text, kb = _offer(monkeypatch, _program({(1, 1): False}))
+    assert text == "Week 1 of 2 · Next up: <b>Pull</b>. Start it or pick another day:"
+    assert rows(kb)[:2] == [
+        [("▶ Start Pull", WkDay(week=1, position=2).pack())],
+        [("Legs", WkDay(week=1, position=3).pack())],
+    ]
+
+
+def test_workout_offers_only_days_of_current_week(monkeypatch):
+    done = {(1, 1): False, (1, 2): True, (1, 3): False, (2, 2): False}
+    text, kb = _offer(monkeypatch, _program(done))
+    assert text.startswith("Week 2 of 2 · Next up: <b>Push</b>.")
+    assert rows(kb)[:2] == [
+        [("▶ Start Push", WkDay(week=2, position=1).pack())],
+        [("Legs", WkDay(week=2, position=3).pack())],
+    ]
 
 
 def test_workout_without_program_starts_free(monkeypatch):
@@ -219,7 +267,7 @@ def test_workout_without_program_starts_free(monkeypatch):
 def test_day_starts_workout_from_plan(monkeypatch):
     _with_program(monkeypatch, PROGRAM)
     call, state = FakeCall(), _state()
-    asyncio.run(recording.cb_day(call, WkDay(position=1), state, None, USER))
+    asyncio.run(recording.cb_day(call, WkDay(week=1, position=1), state, None, USER))
     assert asyncio.run(state.get_state()) == WorkoutSession.active
     data = asyncio.run(state.get_data())
     assert data["program_day"] == "Push" and "started_at" in data
@@ -231,18 +279,26 @@ def test_day_starts_workout_from_plan(monkeypatch):
 def test_second_tap_on_day_is_ignored(monkeypatch):
     _with_program(monkeypatch, PROGRAM)
     state = _state()
-    asyncio.run(recording.cb_day(FakeCall(), WkDay(position=1), state, None, USER))
-    second = FakeCall()
-    asyncio.run(recording.cb_day(second, WkDay(position=2), state, None, USER))
+    first, second = WkDay(week=1, position=1), WkDay(week=1, position=2)
+    asyncio.run(recording.cb_day(FakeCall(), first, state, None, USER))
+    asyncio.run(recording.cb_day((call := FakeCall()), second, state, None, USER))
     assert asyncio.run(state.get_data())["program_day"] == "Push"
-    assert second.message.sent == []
+    assert call.message.sent == []
 
 
-def test_day_of_replaced_program(monkeypatch):
-    _with_program(monkeypatch, None)
+@pytest.mark.parametrize(
+    ("program", "day"),
+    [
+        (None, WkDay(week=1, position=1)),  # программу заменили или удалили
+        (PROGRAM, WkDay(week=2, position=1)),  # неделя 1 ещё не пройдена
+        (_program({(1, 1): False}), WkDay(week=1, position=1)),  # уже сделан
+    ],
+)
+def test_unavailable_day_is_refused(monkeypatch, program, day):
+    _with_program(monkeypatch, program)
     call, state = FakeCall(), _state()
-    asyncio.run(recording.cb_day(call, WkDay(position=1), state, None, USER))
-    assert call.alerts == ["The program has changed. Use /workout again."]
+    asyncio.run(recording.cb_day(call, day, state, None, USER))
+    assert call.alerts == ["This day is no longer available. Use /workout again."]
     assert asyncio.run(state.get_state()) is None
 
 
@@ -337,7 +393,7 @@ class FakeCatalog:
 async def _day_started(monkeypatch, state):
     _with_program(monkeypatch, PROGRAM)
     monkeypatch.setattr(recording, "Catalog", FakeCatalog)
-    await recording.cb_day(FakeCall(), WkDay(position=1), state, None, USER)
+    await recording.cb_day(FakeCall(), WkDay(week=1, position=1), state, None, USER)
 
 
 def _open_plan_exercise(monkeypatch, index):

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import Catalog, ExerciseInfo
 from bot.common.formatting import escape, format_set_compact
-from bot.programs.service import get_program
+from bot.programs.service import get_program, next_session, week_sessions
 from bot.users.models import User
 from bot.workouts.domain import (
     MAX_EXERCISE_NOTES,
@@ -60,18 +60,19 @@ async def cmd_workout(
         )
         return
     program = await get_program(session, db_user.id)
-    if program is None:
+    following = next_session(program) if program else None
+    if program is None or following is None:
         await _start_workout(state)
         await send_workout_main(message, state)
         return
-    days = [(day.position, day.name) for day in program.days]
-    kb = day_choice_kb(days, program.next_position)
-    # подпись первой кнопки — тот день, который предложит клавиатура
-    next_name = kb.inline_keyboard[0][0].text.removeprefix("▶ Start ")
+    week, position = following
+    names = {day.position: day.name for day in program.days}
+    days = [(pos, names[pos]) for _, pos in week_sessions(program, week)]
     await message.answer(
-        f"Next up: <b>{escape(next_name)}</b>. Start it or pick another day:",
+        f"Week {week} of {program.weeks} · Next up: <b>{escape(names[position])}</b>."
+        " Start it or pick another day:",
         parse_mode="HTML",
-        reply_markup=kb,
+        reply_markup=day_choice_kb(week, days, position),
     )
 
 
@@ -94,15 +95,20 @@ async def cb_day(
         await call.answer()
         return
     program = await get_program(session, db_user.id)
-    if program is None or callback_data.position not in {
-        day.position for day in program.days
-    }:
+    following = next_session(program) if program else None
+    chosen = (callback_data.week, callback_data.position)
+    # программу заменили, день уже сделан или неделя ещё не наступила
+    if (
+        program is None
+        or following is None
+        or chosen not in week_sessions(program, following[0])
+    ):
         await call.answer(
-            "The program has changed. Use /workout again.", show_alert=True
+            "This day is no longer available. Use /workout again.", show_alert=True
         )
         return
     plan: dict[str, Any] = {}
-    seed_plan(plan, program, callback_data.position)
+    seed_plan(plan, program, *chosen)
     await _start_workout(state, **plan)
     await send_workout_main(call, state)
     await call.answer()

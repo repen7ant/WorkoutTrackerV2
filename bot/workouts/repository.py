@@ -30,12 +30,13 @@ class WorkoutRepository:
         record: WorkoutRecord,
         names: dict[int, str],
         program_day: str | None = None,
+        program_week: int | None = None,
     ) -> int:
         """names — названия упражнений по id: они сохраняются вместе с
         тренировкой и переживают удаление упражнения из каталога.
 
-        program_day — не часть WorkoutRecord: replace его не трогает, и правка
-        тренировки день программы не стирает."""
+        program_day и program_week — не часть WorkoutRecord: replace их не
+        трогает, и правка тренировки день программы не стирает."""
         workout = Workout(
             user_id=record.user_id,
             date=record.date,
@@ -43,6 +44,7 @@ class WorkoutRepository:
             start_time=record.start_time,
             end_time=record.end_time,
             program_day=program_day,
+            program_week=program_week,
         )
         self.session.add(workout)
         await self.session.flush()
@@ -232,6 +234,7 @@ class WorkoutRepository:
                     start_time=workout.start_time,
                     end_time=workout.end_time,
                     program_day=workout.program_day,
+                    program_week=workout.program_week,
                 )
             if we.id not in entries:
                 entries[we.id] = LoggedExercise(

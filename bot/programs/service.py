@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import Catalog, ExerciseInfo
-from bot.programs.domain import InvalidProgram, ProgramPlan, next_after
+from bot.programs.domain import InvalidProgram, ProgramPlan, sessions
 from bot.programs.repository import ProgramRepository, StoredProgram
 
 
@@ -62,17 +62,38 @@ async def delete_program(session: AsyncSession, user_id: int) -> bool:
     return deleted
 
 
-async def advance(
-    session: AsyncSession, user_id: int, program_id: int, done_position: int
-) -> None:
+def next_session(program: StoredProgram) -> tuple[int, int] | None:
+    """Первая несделанная сессия (неделя, позиция дня); None — программа пройдена."""
+    return next(
+        (s for s in sessions(program.days, program.weeks) if s not in program.done),
+        None,
+    )
+
+
+def week_sessions(program: StoredProgram, week: int) -> list[tuple[int, int]]:
+    """Несделанные сессии недели — дни, которые можно начать."""
+    return [
+        s
+        for s in sessions(program.days, program.weeks)
+        if s[0] == week and s not in program.done
+    ]
+
+
+async def complete_session(
+    session: AsyncSession,
+    user_id: int,
+    program_id: int,
+    week: int,
+    day_position: int,
+    skipped: bool = False,
+) -> StoredProgram | None:
     """
-    Следующим предложит день после выполненного. Программу могли заменить,
-    пока шла тренировка, — тогда её ротацию не трогаем.
+    Отмечает сессию сделанной или пропущенной и возвращает программу после
+    отметки. None — программу заменили или удалили, пока шла тренировка:
+    её сессии не трогаем.
     """
     repo = ProgramRepository(session)
-    program = await repo.get(user_id)
-    if program is None or program.id != program_id:
-        return
-    position = next_after(done_position, len(program.days))
-    if await repo.set_next_position(user_id, program_id, position):
-        await session.commit()
+    if not await repo.add_session(user_id, program_id, week, day_position, skipped):
+        return None
+    await session.commit()
+    return await repo.get(user_id)

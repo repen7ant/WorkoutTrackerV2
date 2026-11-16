@@ -81,7 +81,7 @@ def test_prompt_without_program_or_wishes():
     assert "## CURRENT PROGRAM" not in prompt
     assert "## ATHLETE REQUESTS" not in prompt
     assert "Plan versus actual" not in prompt
-    assert "day:" not in prompt
+    assert "| day:" not in prompt and "`day:`" not in prompt
     assert "5. Program restructuring" in _section(prompt, "## TASK")
     # первую программу ИИ тоже должен выдать блоком для импорта
     assert FORMAT_DESCRIPTION in _section(prompt, "## OUTPUT")

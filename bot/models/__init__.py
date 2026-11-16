@@ -6,7 +6,13 @@
 
 from bot.catalog.models import Exercise, ExerciseMuscle, Muscle
 from bot.db.base import Base
-from bot.programs.models import Program, ProgramDay, ProgramExercise, ProgramSet
+from bot.programs.models import (
+    Program,
+    ProgramDay,
+    ProgramExercise,
+    ProgramSession,
+    ProgramSet,
+)
 from bot.users.models import User
 from bot.workouts.models import Set, Workout, WorkoutExercise
 
@@ -18,6 +24,7 @@ __all__ = [
     "Program",
     "ProgramDay",
     "ProgramExercise",
+    "ProgramSession",
     "ProgramSet",
     "Set",
     "User",
