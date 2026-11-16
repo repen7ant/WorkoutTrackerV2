@@ -1,6 +1,7 @@
 import html
 from collections.abc import Iterable
 from datetime import time
+from decimal import Decimal
 
 from bot.workouts.domain import SetEntry, duration_minutes
 
@@ -14,12 +15,24 @@ def format_weight(weight) -> str:
     return "BW" if weight is None else f"{weight}kg"
 
 
+def format_weight_compact(weight: Decimal | None) -> str:
+    """Вес для текста ИИ: '100', '102.5', 'BW'."""
+    if weight is None:
+        return "BW"
+    return f"{weight.normalize():f}"
+
+
 def format_amount(entry: SetEntry) -> str:
     """Повторения или время подхода (мин:сек)."""
     if entry.seconds is None:
         return str(entry.reps)
     minutes, secs = divmod(entry.seconds, 60)
     return f"{minutes}:{secs:02d}"
+
+
+def format_set_compact(entry: SetEntry) -> str:
+    """Подход для текста ИИ: '100x5', 'BWx1:30'."""
+    return f"{format_weight_compact(entry.weight)}x{format_amount(entry)}"
 
 
 def format_set_lines(sets: Iterable[SetEntry], indent: str = "  ") -> list[str]:

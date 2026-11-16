@@ -1,15 +1,8 @@
 from datetime import date
-from decimal import Decimal
 
-from bot.common.formatting import format_amount
+from bot.common.formatting import format_set_compact
 from bot.export.service import ExportWorkout
 from bot.workouts.domain import duration_minutes
-
-
-def _format_weight_compact(weight: Decimal | None) -> str:
-    if weight is None:
-        return "BW"
-    return f"{weight.normalize():f}"
 
 
 def _one_line(text: str) -> str:
@@ -118,10 +111,7 @@ def build_ai_prompt(
             header += f" | notes: {_one_line(workout['notes'])}"
         lines.append(header)
         for ex in workout["exercises"]:
-            sets_str = ", ".join(
-                f"{_format_weight_compact(s.weight)}x{format_amount(s)}"
-                for s in ex["sets"]
-            )
+            sets_str = ", ".join(format_set_compact(s) for s in ex["sets"])
             line = f"  {ex['name']}: {sets_str}"
             if ex["notes"]:
                 line += f" | notes: {_one_line(ex['notes'])}"
