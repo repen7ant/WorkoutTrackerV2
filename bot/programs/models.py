@@ -1,14 +1,17 @@
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Numeric,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +29,10 @@ class Program(Base):
         BigInteger, ForeignKey("users.id"), unique=True
     )
     weeks: Mapped[int] = mapped_column(SmallInteger, default=1, server_default="1")
+    # с этого момента экспорт выгружает тренировки «за текущую программу»
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class ProgramDay(Base):

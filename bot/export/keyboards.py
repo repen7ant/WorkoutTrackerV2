@@ -7,16 +7,18 @@ class ExportPeriod(CallbackData, prefix="exp_period"):
     period: str
 
 
-def export_period_kb() -> InlineKeyboardMarkup:
+def export_period_kb(has_program: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="Last month", callback_data=ExportPeriod(period="month").pack())
-    builder.button(
-        text="Last 6 months", callback_data=ExportPeriod(period="6months").pack()
-    )
-    builder.button(text="Last year", callback_data=ExportPeriod(period="year").pack())
-    builder.button(text="All time", callback_data=ExportPeriod(period="all").pack())
+    if has_program:
+        builder.button(
+            text="Current program", callback_data=ExportPeriod(period="program")
+        )
+    builder.button(text="Last month", callback_data=ExportPeriod(period="month"))
+    builder.button(text="Last 3 months", callback_data=ExportPeriod(period="3months"))
+    builder.button(text="Last 6 months", callback_data=ExportPeriod(period="6months"))
+    builder.button(text="All time", callback_data=ExportPeriod(period="all"))
     builder.button(text="Cancel", callback_data="exp_cancel")
-    builder.adjust(2, 2, 1)
+    builder.adjust(*[1] * has_program, 2, 2, 1)
     return builder.as_markup()
 
 

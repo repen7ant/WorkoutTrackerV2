@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -9,11 +9,12 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.export import handlers
-from bot.export.keyboards import wishes_kb
+from bot.export.keyboards import export_period_kb, wishes_kb
 from bot.export.prompt import build_ai_prompt
 from bot.export.service import ExportExercise, ExportWorkout
 from bot.export.states import ExportStates
 from bot.programs.parser import FORMAT_DESCRIPTION, PROGRAM_MARKER
+from bot.programs.repository import StoredDay, StoredExercise, StoredProgram
 from bot.users.models import User
 from bot.workouts.domain import SetEntry
 
@@ -278,3 +279,74 @@ def test_day_with_week_in_header():
 def test_restructuring_asks_for_a_cycle_of_weeks():
     task = _section(_prompt(), "## TASK")
     assert "weeks" in task.split("Program restructuring", 1)[1]
+
+
+# --- период «текущая программа» ---
+
+
+def _labels(kb):
+    return [b.text for row in kb.inline_keyboard for b in row]
+
+
+PERIOD_LABELS = ["Last month", "Last 3 months", "Last 6 months", "All time", "Cancel"]
+
+
+@pytest.mark.parametrize(
+    ("has_program", "labels"),
+    [(True, ["Current program", *PERIOD_LABELS]), (False, PERIOD_LABELS)],
+)
+def test_export_period_kb(has_program, labels):
+    assert _labels(export_period_kb(has_program)) == labels
+
+
+# 01:30 11 ноября по UTC+3
+IMPORTED = datetime(2026, 11, 10, 22, 30, tzinfo=UTC)
+
+
+def _imported_program():
+    day = StoredDay(1, "Pull", [StoredExercise(5, "Row", None, [[SetEntry(None, 8)]])])
+    return StoredProgram(id=1, weeks=1, days=[day], done={}, imported_at=IMPORTED)
+
+
+def _with_program(monkeypatch, program):
+    seen = []
+
+    async def fake_get_program(session, user_id):
+        return program
+
+    async def fake_collect(session, user_id, since):
+        seen.append(since)
+        return [_workout()]
+
+    monkeypatch.setattr(handlers, "get_program", fake_get_program)
+    monkeypatch.setattr(handlers, "collect_workouts", fake_collect)
+    return seen
+
+
+def test_export_menu_offers_program_period(export, monkeypatch):
+    _, session = export
+    _with_program(monkeypatch, _imported_program())
+    msg = FakeMessage("/export")
+    asyncio.run(handlers.cmd_export(msg, session, _user()))
+    assert _labels(msg.sent[-1][1])[0] == "Current program"
+
+
+def test_program_period_exports_since_import(export, monkeypatch):
+    state, session = export
+    seen = _with_program(monkeypatch, _imported_program())
+    period = handlers.ExportPeriod(period="program")
+    asyncio.run(handlers.cb_export_period(FakeCall(), period, state, session, _user()))
+    call = FakeCall()
+    asyncio.run(handlers.cb_wishes_skip(call, state, session, _user()))
+    assert seen == [date(2026, 11, 11)] * 2
+    prompt, _ = call.message.documents[-1]
+    assert "Period: current program (2026-11-11 … " in prompt
+
+
+def test_program_period_without_program(export):
+    state, session = export
+    call = FakeCall()
+    period = handlers.ExportPeriod(period="program")
+    asyncio.run(handlers.cb_export_period(call, period, state, session, _user()))
+    assert call.alerts == ["No program."]
+    assert asyncio.run(state.get_state()) is None

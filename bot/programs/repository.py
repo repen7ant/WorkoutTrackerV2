@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -39,6 +40,7 @@ class StoredProgram:
     days: list[StoredDay]
     # (неделя, позиция дня) -> пропущена ли; нет ключа — сессия впереди
     done: dict[tuple[int, int], bool]
+    imported_at: datetime | None = None
 
 
 class ProgramRepository:
@@ -93,6 +95,7 @@ class ProgramRepository:
             weeks=program.weeks,
             days=list(days.values()),
             done={(week, pos): skipped for week, pos, skipped in sessions.tuples()},
+            imported_at=program.imported_at,
         )
 
     async def replace(
