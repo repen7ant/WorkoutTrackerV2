@@ -10,7 +10,7 @@ from bot.workouts.keyboards import workout_main_kb
 
 # Эти команды обязаны работать и посреди ввода: иначе /history во время
 # заметок молча становится текстом заметки, а /start — подходом.
-BOT_COMMANDS = Command("start", "workout", "exercises", "history", "export")
+BOT_COMMANDS = Command("start", "workout", "exercises", "history", "export", "program")
 
 
 async def send_workout_main(target: Message | CallbackQuery, state: FSMContext) -> None:

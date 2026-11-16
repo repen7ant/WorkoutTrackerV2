@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.catalog.api import MUSCLES_PROMPT, parse_muscle_names
 from bot.catalog.formatters import format_exercise_list
 from bot.catalog.keyboards import (
     ExerciseDelete,
@@ -147,9 +148,7 @@ async def cb_add(call: CallbackQuery, ex_state: FSMContext) -> None:
 async def add_name(message: Message, ex_state: FSMContext) -> None:
     await ex_state.update_data(name=message.text.strip())
     await ex_state.set_state(ExerciseAdd.waiting_muscles)
-    await message.answer(
-        "Enter muscles separated by comma (e.g. Chest, Tricep):\nor send — to skip"
-    )
+    await message.answer(MUSCLES_PROMPT)
 
 
 @router.message(ExState(ExerciseAdd.waiting_muscles), WORKOUT_IDLE)
@@ -157,13 +156,11 @@ async def add_muscles(
     message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User
 ) -> None:
     data = await ex_state.get_data()
-    muscle_names = (
-        []
-        if message.text.strip() == "—"
-        else [m.strip() for m in message.text.split(",")]
-    )
     exercise = await add_exercise(
-        session, name=data["name"], user_id=db_user.id, muscle_names=muscle_names
+        session,
+        name=data["name"],
+        user_id=db_user.id,
+        muscle_names=parse_muscle_names(message.text),
     )
     await ex_state.clear()
     if exercise is None:

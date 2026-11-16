@@ -3,6 +3,7 @@ from aiogram import Router
 from bot.catalog import handlers as catalog
 from bot.export import handlers as export
 from bot.history import handlers as history
+from bot.programs import handlers as programs
 from bot.users import handlers as users
 from bot.workouts import handlers as workouts
 
@@ -18,6 +19,7 @@ def get_routers() -> list[Router]:
         workouts.router,
         history.router,
         export.router,
+        programs.router,
         # последним: в нём ловушка для любых сообщений
         start.router,
     ]

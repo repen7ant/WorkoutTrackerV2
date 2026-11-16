@@ -5,6 +5,7 @@
 каталога
 """
 
+import re
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -13,11 +14,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.catalog.models import Exercise, ExerciseMuscle, Muscle
 from bot.catalog.repository import ExerciseRepository
 
+MUSCLES_PROMPT = (
+    "Enter muscles separated by comma (e.g. Chest, Tricep):\nor send — to skip"
+)
+
 
 @dataclass(frozen=True)
 class ExerciseInfo:
     id: int
     name: str
+
+
+def parse_muscle_names(text: str) -> list[str]:
+    """Ответ на MUSCLES_PROMPT. Пустые части — от лишней запятой — не мышцы."""
+    text = text.strip()
+    if text in ("—", "-"):
+        return []
+    return [m.strip() for m in text.split(",") if m.strip()]
 
 
 def match_names(
@@ -27,6 +40,32 @@ def match_names(
     for ex in catalog:
         index.setdefault(ex.name.casefold(), ex)
     return {name: index[name.casefold()] for name in names if name.casefold() in index}
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", text.casefold()) if len(w) >= 3}
+
+
+def rank_similar(
+    name: str, catalog: list[ExerciseInfo], limit: int = 5
+) -> list[ExerciseInfo]:
+    """
+    По числу общих слов; слово совпадает и по началу — «squats» и «squat».
+    Поиск по подстроке тут не помогает: «Barbell Back Squat» не найдёт
+    «Back Squat».
+    """
+    words = _words(name)
+    scored = []
+    for ex in catalog:
+        other = _words(ex.name)
+        score = sum(
+            any(w.startswith(o) or o.startswith(w) for o in other) for w in words
+        )
+        if score:
+            # при равном счёте выше то, где меньше лишних слов
+            scored.append((-score, len(other) - score, ex.name, ex))
+    scored.sort(key=lambda item: item[:3])
+    return [ex for *_, ex in scored[:limit]]
 
 
 class Catalog:
@@ -66,17 +105,27 @@ class Catalog:
         """
         Доступные пользователю упражнения с этими названиями, без учёта
         регистра; ключи — названия как во входе.
+        """
+        return match_names(names, await self._visible(user_id))
 
-        Сравниваем в Python: lower() в Postgres зависит от локали базы
-        и кириллицу может не опустить. Каталог — сотни строк, не больше.
+    async def similar(
+        self, name: str, user_id: int, limit: int = 5
+    ) -> list[ExerciseInfo]:
+        """Упражнения с общими словами в названии — самые похожие первыми."""
+        return rank_similar(name, await self._visible(user_id), limit)
+
+    async def _visible(self, user_id: int) -> list[ExerciseInfo]:
+        """
+        Весь доступный пользователю каталог. Названия сравниваем в Python:
+        lower() в Postgres зависит от локали базы и кириллицу может не
+        опустить. Каталог — сотни строк, не больше.
         """
         result = await self.session.execute(
             select(Exercise.id, Exercise.name)
             .where(Exercise.visible_to(user_id))
             .order_by(Exercise.id)
         )
-        catalog = [ExerciseInfo(id=i, name=n) for i, n in result.tuples().all()]
-        return match_names(names, catalog)
+        return [ExerciseInfo(id=i, name=n) for i, n in result.tuples().all()]
 
     async def muscles(self, exercise_ids: set[int]) -> dict[int, list[str]]:
         """
