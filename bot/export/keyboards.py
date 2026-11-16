@@ -18,3 +18,13 @@ def export_period_kb() -> InlineKeyboardMarkup:
     builder.button(text="Cancel", callback_data="exp_cancel")
     builder.adjust(2, 2, 1)
     return builder.as_markup()
+
+
+def wishes_kb(has_previous: bool) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if has_previous:
+        builder.button(text="Keep previous", callback_data="exp_wishes_keep")
+    builder.button(text="Skip", callback_data="exp_wishes_skip")
+    builder.button(text="Cancel", callback_data="exp_cancel")
+    builder.adjust(1)
+    return builder.as_markup()

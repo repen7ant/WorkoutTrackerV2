@@ -23,24 +23,28 @@ from bot.workouts.set_parse import parse_set
 PROGRAM_MARKER = "# PROGRAM"
 
 FORMAT_DESCRIPTION = f"""\
+```
 {PROGRAM_MARKER}
 == Day name ==
-Exercise name: 100x5, 100x5, 100x5 | notes: optional short cue
+Exercise name: 100x5, 100x5, 100x5 | notes: rest 3 min
 Exercise name: BWx12, BWx12, BWx12
 Exercise name: BWx1:30, BWx1:30
+```
 
 - The block starts with the line `{PROGRAM_MARKER}`.
 - `== Day name ==` starts a training day. Days are trained in rotation, in the
-  order listed. 1-{MAX_DAYS} days, unique names of up to {MAX_DAY_NAME} characters.
+  order listed: {MAX_DAYS} days at most, unique names of up to {MAX_DAY_NAME}
+  characters.
 - One line per exercise: the name, a colon, then every set as weight x reps,
-  separated by commas, in the order they are performed. 1-{MAX_DAY_EXERCISES}
-  exercises per day, 1-{MAX_EXERCISE_SETS} sets per exercise.
+  separated by commas, in the order they are performed: up to
+  {MAX_DAY_EXERCISES} exercises per day and {MAX_EXERCISE_SETS} sets per exercise.
 - Weight is in kilograms; `BW` means bodyweight only. A time in place of reps
   (`1:30`, minutes:seconds) makes a timed set.
 - Exact numbers only: one fixed weight and rep count per set. No rep ranges
   (8-12), no RPE or percentages, no weeks or progression schemes.
-- `| notes:` is optional: a short cue for the exercise on the same line, up to
-  {MAX_EXERCISE_NOTES} characters.
+- `| notes:` is optional: a rest time or technique cue on the same line, up to
+  {MAX_EXERCISE_NOTES} characters. A variation (paused, incline) is a separate
+  exercise with its own name, not a note.
 - Nothing else inside the block: no comments, no markdown, no explanations."""
 
 _DAY = re.compile(r"==+(.*?)==+")

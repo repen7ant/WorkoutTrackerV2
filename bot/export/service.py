@@ -1,5 +1,5 @@
 from datetime import date, time
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ class ExportWorkout(TypedDict):
     end_time: time | None
     notes: str | None
     exercises: list[ExportExercise]
+    program_day: NotRequired[str | None]
 
 
 async def collect_workouts(
@@ -48,6 +49,7 @@ async def collect_workouts(
             start_time=w.start_time,
             end_time=w.end_time,
             notes=w.notes,
+            program_day=w.program_day,
             exercises=[
                 ExportExercise(
                     name=ex.name,
@@ -61,3 +63,14 @@ async def collect_workouts(
         )
         for w in workouts
     ]
+
+
+async def catalog_exercises(
+    session: AsyncSession, user_id: int
+) -> dict[str, list[str]]:
+    """Весь доступный пользователю каталог: название -> мышцы. ИИ выбирает
+    упражнения для программы отсюда, а не придумывает названия."""
+    catalog = Catalog(session)
+    exercises = await catalog.visible(user_id)
+    muscles = await catalog.muscles({ex.id for ex in exercises})
+    return {ex.name: muscles.get(ex.id, []) for ex in exercises}

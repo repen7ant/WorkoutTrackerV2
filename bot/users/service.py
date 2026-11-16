@@ -40,6 +40,12 @@ async def update_setting(
     await session.commit()
 
 
+async def set_ai_wishes(session: AsyncSession, user: User, wishes: str | None) -> None:
+    """Пожелания для ИИ из /export; None — стереть."""
+    user.ai_wishes = wishes
+    await session.commit()
+
+
 async def all_user_ids(session: AsyncSession) -> list[int]:
     result = await session.execute(select(User.id).order_by(User.id))
     return list(result.scalars().all())

@@ -106,15 +106,15 @@ class Catalog:
         Доступные пользователю упражнения с этими названиями, без учёта
         регистра; ключи — названия как во входе.
         """
-        return match_names(names, await self._visible(user_id))
+        return match_names(names, await self.visible(user_id))
 
     async def similar(
         self, name: str, user_id: int, limit: int = 5
     ) -> list[ExerciseInfo]:
         """Упражнения с общими словами в названии — самые похожие первыми."""
-        return rank_similar(name, await self._visible(user_id), limit)
+        return rank_similar(name, await self.visible(user_id), limit)
 
-    async def _visible(self, user_id: int) -> list[ExerciseInfo]:
+    async def visible(self, user_id: int) -> list[ExerciseInfo]:
         """
         Весь доступный пользователю каталог. Названия сравниваем в Python:
         lower() в Postgres зависит от локали базы и кириллицу может не
