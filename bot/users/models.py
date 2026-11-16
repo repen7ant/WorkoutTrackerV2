@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, SmallInteger, String, true
+from sqlalchemy import BigInteger, SmallInteger, String, Text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -22,3 +22,5 @@ class User(Base):
     utc_offset: Mapped[int] = mapped_column(
         SmallInteger, default=180, server_default="180"
     )
+    # последние пожелания для ИИ из /export
+    ai_wishes: Mapped[str | None] = mapped_column(Text)
