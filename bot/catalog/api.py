@@ -20,6 +20,15 @@ class ExerciseInfo:
     name: str
 
 
+def match_names(
+    names: list[str], catalog: list[ExerciseInfo]
+) -> dict[str, ExerciseInfo]:
+    index: dict[str, ExerciseInfo] = {}
+    for ex in catalog:
+        index.setdefault(ex.name.casefold(), ex)
+    return {name: index[name.casefold()] for name in names if name.casefold() in index}
+
+
 class Catalog:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -52,6 +61,22 @@ class Catalog:
             ex_id: ExerciseInfo(id=ex_id, name=name)
             for ex_id, name in result.tuples().all()
         }
+
+    async def by_names(self, names: list[str], user_id: int) -> dict[str, ExerciseInfo]:
+        """
+        Доступные пользователю упражнения с этими названиями, без учёта
+        регистра; ключи — названия как во входе.
+
+        Сравниваем в Python: lower() в Postgres зависит от локали базы
+        и кириллицу может не опустить. Каталог — сотни строк, не больше.
+        """
+        result = await self.session.execute(
+            select(Exercise.id, Exercise.name)
+            .where(Exercise.visible_to(user_id))
+            .order_by(Exercise.id)
+        )
+        catalog = [ExerciseInfo(id=i, name=n) for i, n in result.tuples().all()]
+        return match_names(names, catalog)
 
     async def muscles(self, exercise_ids: set[int]) -> dict[int, list[str]]:
         """
