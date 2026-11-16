@@ -15,14 +15,18 @@ from bot.users.models import User
 from bot.workouts.domain import InvalidWorkout
 from bot.workouts.draft import build_record, utc_now_iso, workout_today
 from bot.workouts.formatters import format_confirm
-from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_main
+from bot.workouts.handlers.common import (
+    BOT_COMMANDS,
+    remove_kb,
+    send_workout_main,
+    workout_main_view,
+)
 from bot.workouts.keyboards import (
     cancel_confirm_kb,
     confirm_save_kb,
     finish_confirm_kb,
     finish_date_kb,
     finish_notes_kb,
-    workout_main_kb,
 )
 from bot.workouts.service import ExerciseNotAvailable, record_workout
 from bot.workouts.states import WorkoutSession
@@ -153,7 +157,8 @@ async def cb_finish_confirm(
     await state.update_data(
         workout_date=_today(db_user, await state.get_data()), notes=None
     )
-    await _save(call, state, session, db_user, restore_kb=workout_main_kb())
+    _, restore_kb = workout_main_view(await state.get_data())
+    await _save(call, state, session, db_user, restore_kb=restore_kb)
 
 
 # назад в основное окно тренировки

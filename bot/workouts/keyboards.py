@@ -11,12 +11,44 @@ class ExerciseChoice(CallbackData, prefix="wk_ex"):
     exercise_id: int
 
 
-def workout_main_kb() -> InlineKeyboardMarkup:
+class WkDay(CallbackData, prefix="wk_day"):
+    position: int
+
+
+class WkPlanEx(CallbackData, prefix="wk_plan_ex"):
+    index: int  # пункт плана дня в черновике
+
+
+def day_choice_kb(
+    days: list[tuple[int, str]], next_position: int
+) -> InlineKeyboardMarkup:
+    """Следующий по ротации день — первой кнопкой, остальные — по два в ряд."""
+    positions = [pos for pos, _ in days]
+    if next_position not in positions:
+        next_position = positions[0]
     builder = InlineKeyboardBuilder()
+    builder.button(
+        text=f"▶ Start {dict(days)[next_position]}",
+        callback_data=WkDay(position=next_position),
+    )
+    others = [(pos, name) for pos, name in days if pos != next_position]
+    for pos, name in others:
+        builder.button(text=name, callback_data=WkDay(position=pos))
+    builder.button(text="Free workout", callback_data="wk_free")
+    builder.adjust(1, *[2] * (len(others) // 2), *[1] * (len(others) % 2), 1)
+    return builder.as_markup()
+
+
+def workout_main_kb(
+    plan_buttons: list[tuple[int, str]] | None = None,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for index, name in plan_buttons or []:
+        builder.button(text=name, callback_data=WkPlanEx(index=index))
     builder.button(text="Add exercise", callback_data="wk_add_exercise")
     builder.button(text="Finish session", callback_data="wk_finish")
     builder.button(text="Cancel workout", callback_data="wk_cancel")
-    builder.adjust(2, 1)
+    builder.adjust(*[1] * len(plan_buttons or []), 2, 1)
     return builder.as_markup()
 
 

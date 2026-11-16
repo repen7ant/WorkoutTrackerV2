@@ -6,12 +6,20 @@
                          "seconds": int | None}]}]
   started_at, finished_at: str — /workout и последнее Finish session, ISO в UTC
 
+Тренировка по дню программы — ещё:
+
+  program_id: int, program_day: str, program_day_position: int
+  plan: [{"exercise_id": int | None, "name": str, "notes": str | None,
+          "deleted": bool, "sets": [set]}] — план дня, копия: программу
+          могут заменить, пока идёт тренировка
+  exercises[].plan_index: int — пункт плана, по которому сделано упражнение
+
 Ключи seconds, notes, started_at и finished_at появились позже: в черновиках,
 начатых раньше, их нет, и такие черновики должны сохраняться так же.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bot.users.settings import to_local
 from bot.workouts.domain import (
@@ -20,6 +28,9 @@ from bot.workouts.domain import (
     SetEntry,
     WorkoutRecord,
 )
+
+if TYPE_CHECKING:
+    from bot.programs.repository import StoredProgram
 
 
 def utc_now_iso() -> str:
@@ -35,6 +46,50 @@ def sets_from_fsm(sets: list[dict[str, Any]]) -> list[SetEntry]:
     return [
         SetEntry(weight=s["weight"], reps=s["reps"], seconds=s.get("seconds"))
         for s in sets
+    ]
+
+
+def seed_plan(data: dict[str, Any], program: "StoredProgram", position: int) -> None:
+    """Кладёт в черновик план дня position."""
+    day = next(d for d in program.days if d.position == position)
+    data.update(
+        program_id=program.id,
+        program_day=day.name,
+        program_day_position=position,
+        plan=[
+            {
+                "exercise_id": ex.exercise_id,
+                "name": ex.name,
+                "notes": ex.notes,
+                # удалённое из каталога в тренировку не добавить
+                "deleted": ex.exercise_id is None,
+                "sets": [set_to_fsm(s) for s in ex.sets],
+            }
+            for ex in day.exercises
+        ],
+    )
+
+
+def plan_statuses(data: dict[str, Any]) -> list[tuple[str, str]] | None:
+    """(название, done | todo | deleted) по пунктам плана; None — плана нет."""
+    if "plan" not in data:
+        return None
+    done = {ex.get("plan_index") for ex in data.get("exercises", [])}
+    return [
+        (
+            item["name"],
+            "deleted" if item["deleted"] else "done" if i in done else "todo",
+        )
+        for i, item in enumerate(data["plan"])
+    ]
+
+
+def plan_todo(data: dict[str, Any]) -> list[tuple[int, str]]:
+    """Пункты плана, которые ещё можно сделать: (номер, название)."""
+    return [
+        (i, name)
+        for i, (name, status) in enumerate(plan_statuses(data) or [])
+        if status == "todo"
     ]
 
 

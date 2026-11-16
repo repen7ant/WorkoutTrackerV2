@@ -5,18 +5,31 @@ from bot.common.formatting import escape, format_duration, format_set_lines
 from bot.workouts.domain import LoggedWorkout, SetEntry
 from bot.workouts.draft import sets_from_fsm
 
+_PLAN_STATUS = {"done": "✓ {}", "todo": "— {}", "deleted": "{} (deleted)"}
+
 
 def format_workout_main(
-    exercises: list[dict[str, Any]], elapsed_minutes: int | None = None
+    exercises: list[dict[str, Any]],
+    elapsed_minutes: int | None = None,
+    day_name: str | None = None,
+    statuses: list[tuple[str, str]] | None = None,
 ) -> str:
-    if not exercises:
+    if not exercises and statuses is None:
         return "Workout started. Add your first exercise."
+    parts = []
+    if day_name is not None:
+        parts.append(escape(day_name))
     # у черновиков, начатых до обновления, начала нет
-    if elapsed_minutes is None:
-        title = "<b>Current workout:</b>"
+    if elapsed_minutes is not None:
+        parts.append(format_duration(elapsed_minutes))
+    if parts:
+        title = " · ".join(["<b>Current workout</b>", *parts])
     else:
-        title = f"<b>Current workout</b> · {format_duration(elapsed_minutes)}"
+        title = "<b>Current workout:</b>"
     lines = [f"{title}\n"]
+    if statuses is not None:
+        lines.extend(_PLAN_STATUS[status].format(escape(n)) for n, status in statuses)
+        lines.append("")
     for ex in exercises:
         lines.append(f"<b>{escape(ex['exercise_name'])}</b>")
         # у черновиков, начатых до заметок к упражнениям, ключа нет

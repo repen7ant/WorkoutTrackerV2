@@ -9,6 +9,8 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import Catalog
+from bot.common.formatting import escape
+from bot.programs.service import get_program
 from bot.users.models import User
 from bot.workouts.domain import (
     MAX_EXERCISE_NOTES,
@@ -16,7 +18,7 @@ from bot.workouts.domain import (
     InvalidWorkout,
     exercise_notes,
 )
-from bot.workouts.draft import set_to_fsm, sets_from_fsm, utc_now_iso
+from bot.workouts.draft import seed_plan, set_to_fsm, sets_from_fsm, utc_now_iso
 from bot.workouts.formatters import (
     format_current_sets,
     format_exercise_log,
@@ -25,6 +27,8 @@ from bot.workouts.formatters import (
 from bot.workouts.handlers.common import BOT_COMMANDS, remove_kb, send_workout_main
 from bot.workouts.keyboards import (
     ExerciseChoice,
+    WkDay,
+    day_choice_kb,
     exercise_choices_kb,
     set_entered_kb,
 )
@@ -37,16 +41,73 @@ router = Router(name="workout_recording")
 
 # /workout
 @router.message(Command("workout"))
-async def cmd_workout(message: Message, state: FSMContext) -> None:
+async def cmd_workout(
+    message: Message, state: FSMContext, session: AsyncSession, db_user: User
+) -> None:
     current = await state.get_state()
     if current is not None:
         await message.answer(
             "Workout is already in progress. Use the buttons to continue."
         )
         return
+    program = await get_program(session, db_user.id)
+    if program is None:
+        await _start_workout(state)
+        await send_workout_main(message, state)
+        return
+    days = [(day.position, day.name) for day in program.days]
+    kb = day_choice_kb(days, program.next_position)
+    # подпись первой кнопки — тот день, который предложит клавиатура
+    next_name = kb.inline_keyboard[0][0].text.removeprefix("▶ Start ")
+    await message.answer(
+        f"Next up: <b>{escape(next_name)}</b>. Start it or pick another day:",
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
+
+
+async def _start_workout(state: FSMContext, **plan: Any) -> None:
     await state.set_state(WorkoutSession.active)
-    await state.update_data(exercises=[], started_at=utc_now_iso())
-    await send_workout_main(message, state)
+    await state.update_data(exercises=[], started_at=utc_now_iso(), **plan)
+
+
+# день программы
+@router.callback_query(WkDay.filter())
+async def cb_day(
+    call: CallbackQuery,
+    callback_data: WkDay,
+    state: FSMContext,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    if await state.get_state() is not None:
+        # второй тап или старая кнопка: тренировка уже идёт
+        await call.answer()
+        return
+    program = await get_program(session, db_user.id)
+    if program is None or callback_data.position not in {
+        day.position for day in program.days
+    }:
+        await call.answer(
+            "The program has changed. Use /workout again.", show_alert=True
+        )
+        return
+    plan: dict[str, Any] = {}
+    seed_plan(plan, program, callback_data.position)
+    await _start_workout(state, **plan)
+    await send_workout_main(call, state)
+    await call.answer()
+
+
+# тренировка без программы
+@router.callback_query(F.data == "wk_free")
+async def cb_free(call: CallbackQuery, state: FSMContext) -> None:
+    if await state.get_state() is not None:
+        await call.answer()
+        return
+    await _start_workout(state)
+    await send_workout_main(call, state)
+    await call.answer()
 
 
 # добавить упражнение
