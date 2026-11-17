@@ -2,7 +2,7 @@
 Рассылка всем пользователям бота — например, анонс обновления.
 
 На сервере, в ~/workout-tracker:
-docker compose -f docker-compose.prod.yaml exec bot uv run -m bot.broadcast "текст"
+docker compose -f docker-compose.prod.yaml exec bot python -m bot.broadcast "текст"
 """
 
 import asyncio
@@ -37,7 +37,7 @@ async def broadcast(text: str) -> None:
 
 def main() -> None:
     if len(sys.argv) != 2 or not sys.argv[1].strip():
-        sys.exit('usage: uv run -m bot.broadcast "text"')
+        sys.exit('usage: python -m bot.broadcast "text"')
     text = sys.argv[1].strip()
     if len(text) > MAX_MESSAGE:
         sys.exit(f"text is longer than {MAX_MESSAGE} characters")

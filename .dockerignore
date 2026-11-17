@@ -9,3 +9,9 @@ Dockerfile
 .venv/
 .ruff_cache/
 settings.toml
+docker-compose.prod.yaml
+.env
+.pytest_cache/
+tests/
+docs/
+*.md

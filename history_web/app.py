@@ -4,6 +4,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from aiohttp import web
+from aiohttp.web_log import AccessLogger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.catalog.api import Catalog
@@ -26,6 +27,16 @@ token_key = web.AppKey("token", str)
 sessionmaker_key = web.AppKey("sessionmaker", async_sessionmaker)
 
 routes = web.RouteTableDef()
+
+
+class QuietHealthAccessLogger(AccessLogger):
+    """healthcheck дёргает /health каждые 10 секунд — в логе это только шум"""
+
+    def log(
+        self, request: web.BaseRequest, response: web.StreamResponse, time: float
+    ) -> None:
+        if request.path != "/health":
+            super().log(request, response, time)
 
 
 def error(status: int, message: str) -> web.Response:
@@ -59,6 +70,11 @@ async def api_middleware(request: web.Request, handler) -> web.StreamResponse:
 @routes.get("/")
 async def index(request: web.Request) -> web.FileResponse:
     return web.FileResponse(STATIC_DIR / "index.html")
+
+
+@routes.get("/health")
+async def health(request: web.Request) -> web.Response:
+    return web.json_response({"status": "ok"})
 
 
 @routes.get("/api/workouts")

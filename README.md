@@ -292,7 +292,7 @@ Pull-ups: BWx6x3 / BWx7x3 / BWx8x3 / BWx5x2
 
 ```bash
 cd ~/workout-tracker
-docker compose -f docker-compose.prod.yaml exec bot uv run -m bot.broadcast "Текст сообщения"
+docker compose -f docker-compose.prod.yaml exec bot python -m bot.broadcast "Текст сообщения"
 ```
 
 Скрипт покажет текст и число получателей и спросит подтверждение (`y`). Тех, кто заблокировал бота или удалил аккаунт, пропускает. Текст — обычный, без форматирования, до 4096 символов; кавычки можно закрыть на следующей строке, чтобы сообщение было в несколько строк.
@@ -304,15 +304,15 @@ docker compose -f docker-compose.prod.yaml exec bot uv run -m bot.broadcast "Т�
 1. Пока стоит новый образ — отметить в базе последнюю ревизию старого (`down_revision` первой новой миграции). Колонки и данные остаются:
 
    ```bash
-   docker compose -f docker-compose.prod.yaml run --rm migrations uv run alembic stamp <ревизия>
+   docker compose -f docker-compose.prod.yaml run --rm migrations alembic stamp <ревизия>
    ```
 
    Откат к образу до программы тренировок — `ca76cb4f8c6d`: таблицы программ и колонки `workouts.program_day`, `workouts.program_week`, `users.ai_wishes` старому образу не мешают.
 
-2. Задеплоить старый образ.
+2. Задеплоить старый образ. В образах до multi-stage нет `python` из venv в `PATH` — для них в `docker-compose.prod.yaml` вернуть команды через `uv run` (`uv run alembic upgrade head`, `uv run -m bot.data.seed`, `uv run -m history_web`).
 3. Когда новый образ выкатится снова, его `migrations` упадёт: колонки уже есть. Вернуть отметку и поднять сервисы:
 
    ```bash
-   docker compose -f docker-compose.prod.yaml run --rm migrations uv run alembic stamp head
+   docker compose -f docker-compose.prod.yaml run --rm migrations alembic stamp head
    docker compose -f docker-compose.prod.yaml up -d
    ```
