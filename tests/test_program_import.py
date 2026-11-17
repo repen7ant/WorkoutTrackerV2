@@ -274,7 +274,11 @@ def test_save_db_error_restores_confirm_kb(wizard, monkeypatch):
     asyncio.run(import_.on_program_text(FakeMessage(PROGRAM), state, None, USER))
     asyncio.run(
         import_.cb_pick(
-            FakeCall(FakeMessage()), ImportPick(exercise_id=3, left=1), state, None, USER
+            FakeCall(FakeMessage()),
+            ImportPick(exercise_id=3, left=1),
+            state,
+            None,
+            USER,
         )
     )
     save = FakeCall(FakeMessage())

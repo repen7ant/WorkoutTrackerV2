@@ -137,6 +137,14 @@ def test_parse_colon_in_exercise_name():
     assert plan.days[0].exercises[0].name == "Row: chest supported"
 
 
+def test_parse_pipe_in_exercise_name():
+    """Название из каталога бывает с «|» — /program должен проходить обратно."""
+    plan = parse_program("# PROGRAM\n== A ==\nBench | paused: 100x5 | notes: slow")
+    ex = plan.days[0].exercises[0]
+    assert (ex.name, ex.notes) == ("Bench | paused", "slow")
+    assert parse_program(render_program(plan.days)) == plan
+
+
 def _days(count: int) -> str:
     return "".join(f"== Day {i} ==\nDips: BWx5\n" for i in range(1, count + 1))
 

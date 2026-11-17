@@ -96,4 +96,8 @@ async def complete_session(
     if not await repo.add_session(user_id, program_id, week, day_position, skipped):
         return None
     await session.commit()
-    return await repo.get(user_id)
+    program = await repo.get(user_id)
+    if program is None or program.id != program_id:
+        # заменили сразу после отметки
+        return None
+    return program

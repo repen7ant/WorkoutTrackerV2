@@ -114,6 +114,20 @@ def test_complete_session_of_replaced_program(monkeypatch):
     assert not session.committed
 
 
+def test_complete_session_of_program_replaced_after_mark(monkeypatch):
+    """Отметка прошла, но программу тут же заменили: чужую не возвращать."""
+    repo = FakeRepo()
+
+    async def add_and_replace(user_id, program_id, week, day_position, skipped):
+        repo.program = StoredProgram(id=6, weeks=1, days=[], done={})
+        return True
+
+    repo.add_session = add_and_replace
+    session, result = _complete(monkeypatch, repo)
+    assert result is None
+    assert session.committed
+
+
 class FakeCatalog:
     def __init__(self, session):
         pass

@@ -1,9 +1,9 @@
 from contextlib import suppress
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,16 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.common.formatting import escape
 from bot.export.keyboards import ExportPeriod, export_period_kb, wishes_kb
 from bot.export.prompt import build_ai_prompt
-from bot.export.service import catalog_exercises, collect_workouts
+from bot.export.service import (
+    ExportWorkout,
+    catalog_exercises,
+    collect_workouts,
+    has_workouts,
+)
 from bot.export.states import ExportStates
-from bot.filters import ExState
+from bot.filters import WORKOUT_IDLE, ExState
 from bot.programs.formatters import format_progress, render_program
 from bot.programs.parser import PROGRAM_MARKER, has_program_marker
 from bot.programs.service import get_program
 from bot.users.models import User
 from bot.users.service import set_ai_wishes
 from bot.users.settings import local_now, to_local
-from bot.workouts.states import WorkoutSession
 
 router = Router(name="export")
 
@@ -34,8 +38,6 @@ PERIODS: dict[str, tuple[str, int | None]] = {
 # с даты импорта текущей программы
 PROGRAM_PERIOD = "program"
 MAX_WISHES = 1000
-# текст, пока тренировка ждёт ввода, принадлежит ей
-WORKOUT_IDLE = StateFilter(None, WorkoutSession.active)
 WISHES_PROMPT = (
     "Any requests for the AI? Preferences and limits: full body, "
     "no leg press in my gym, 2.5 kg plates, sore shoulder…\n"
@@ -70,7 +72,7 @@ async def cb_export_period(
         return
     label, since = period
     # пусто — говорим сразу, а не после вопроса о пожеланиях
-    if not await collect_workouts(session, db_user.id, since):
+    if not await has_workouts(session, db_user.id, since):
         await call.message.edit_text(f"No workouts for {label}.")
         await call.answer()
         return
@@ -142,6 +144,21 @@ async def cb_export_cancel(call: CallbackQuery, ex_state: FSMContext) -> None:
     await call.answer()
 
 
+def _since_import(
+    workouts: list[ExportWorkout], imported_at: datetime, utc_offset: int
+) -> list[ExportWorkout]:
+    """Без тренировок дня импорта, начатых до него: они — по старой программе.
+    У тренировки без времени начала момента нет — она остаётся."""
+    imported = to_local(imported_at, utc_offset)
+    return [
+        w
+        for w in workouts
+        if w["date"] > imported.date()
+        or w["start_time"] is None
+        or w["start_time"] >= imported.time()
+    ]
+
+
 async def _period(
     session: AsyncSession, user: User, key: str
 ) -> tuple[str, date | None] | None:
@@ -184,11 +201,13 @@ async def _send_export(
     label, since = period
 
     workouts = await collect_workouts(session, user.id, since)
+    program = await get_program(session, user.id)
+    if key == PROGRAM_PERIOD and program is not None and program.imported_at:
+        workouts = _since_import(workouts, program.imported_at, user.utc_offset)
     if not workouts:
         # тренировки удалили, пока шёл вопрос о пожеланиях
         await say(f"No workouts for {label}.")
         return
-    program = await get_program(session, user.id)
     prompt = build_ai_prompt(
         workouts,
         label,

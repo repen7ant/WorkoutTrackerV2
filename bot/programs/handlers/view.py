@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.common.formatting import escape
+from bot.common.formatting import MAX_MESSAGE_LENGTH, escape
 from bot.common.keyboards import yes_no_kb
 from bot.programs.formatters import format_progress, render_program
 from bot.programs.keyboards import program_kb
@@ -18,8 +18,6 @@ NO_PROGRAM = (
     "1. /export your log and send the file to any AI chat.\n"
     "2. Paste the AI's block that starts with # PROGRAM back here."
 )
-# сообщение Telegram — не длиннее 4096 символов, с тегами <pre>
-MAX_MESSAGE_LENGTH = 4000
 
 
 @router.message(Command("program"))

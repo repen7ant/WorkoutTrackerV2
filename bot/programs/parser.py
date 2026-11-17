@@ -67,7 +67,8 @@ _SET = re.compile(
     r"(?:\s*[XХ]\s*(?P<count>\d+))?\s*(?:,|$)",
     re.IGNORECASE,
 )
-_NOTES = re.compile(r"\s*notes:(.*)", re.IGNORECASE)
+# по «| notes:», а не первому «|»: название из каталога бывает с «|»
+_NOTES = re.compile(r"\|\s*notes:(.*)", re.IGNORECASE)
 # двоеточие перед подходами: в «1:30» за ним цифра, а не пробел
 _NAME_COLON = re.compile(r":(?=\s)")
 
@@ -114,18 +115,16 @@ def _parse_weeks(text: str) -> list[list[SetEntry]]:
 
 
 def _parse_exercise(line: str) -> PlanExercise:
-    main, bar, rest = line.partition("|")
-    notes = None
-    if bar:
-        m = _NOTES.fullmatch(rest)
-        if m is None:
-            raise InvalidProgram('expected "| notes: ..." after the sets')
-        notes = m[1]
+    m = _NOTES.search(line)
+    main = line[: m.start()] if m else line
+    notes = m[1] if m else None
     # название само может быть с двоеточием: «Row: chest supported: 40x10»
-    colons = [m.start() for m in _NAME_COLON.finditer(main)]
+    colons = [c.start() for c in _NAME_COLON.finditer(main)]
     split = colons[-1] if colons else main.find(":")
     if split < 0:
         raise InvalidProgram(f'expected "Exercise: sets", got "{line}"')
+    if "|" in main[split + 1 :]:
+        raise InvalidProgram('expected "| notes: ..." after the sets')
     return PlanExercise.create(main[:split], _parse_weeks(main[split + 1 :]), notes)
 
 

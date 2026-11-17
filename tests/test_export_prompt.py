@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -170,6 +170,9 @@ def export(monkeypatch):
     async def fake_collect(session, user_id, since):
         return [_workout()]
 
+    async def fake_has(session, user_id, since):
+        return True
+
     async def fake_get_program(session, user_id):
         return None
 
@@ -178,6 +181,7 @@ def export(monkeypatch):
 
     monkeypatch.setattr(handlers, "catalog_exercises", fake_catalog)
     monkeypatch.setattr(handlers, "collect_workouts", fake_collect)
+    monkeypatch.setattr(handlers, "has_workouts", fake_has)
     monkeypatch.setattr(handlers, "get_program", fake_get_program)
     state = FSMContext(
         storage=MemoryStorage(),
@@ -358,9 +362,48 @@ def test_program_period_exports_since_import(export, monkeypatch):
     asyncio.run(handlers.cb_export_period(FakeCall(), period, state, session, _user()))
     call = FakeCall()
     asyncio.run(handlers.cb_wishes_skip(call, state, session, _user()))
-    assert seen == [date(2026, 11, 11)] * 2
+    # полный лог грузится один раз, при отправке: выбор периода — лёгкая проверка
+    assert seen == [date(2026, 11, 11)]
     prompt, _ = call.message.documents[-1]
     assert "Period: current program (2026-11-11 … " in prompt
+
+
+def test_period_without_workouts_says_so(export, monkeypatch):
+    state, session = export
+
+    async def empty(session, user_id, since):
+        return False
+
+    monkeypatch.setattr(handlers, "has_workouts", empty)
+    call = _ask(state, session, _user())
+    assert call.message.sent[-1][0] == "No workouts for last month."
+    assert asyncio.run(state.get_state()) is None
+
+
+def test_program_period_drops_same_day_earlier_workouts(export, monkeypatch):
+    """Утренняя тренировка по старой программе в день импорта — не в выгрузку."""
+    state, session = export
+    _with_program(monkeypatch, _imported_program())
+    early = _workout(notes="before the import")
+    early["date"], early["start_time"] = date(2026, 11, 11), time(0, 40)
+    later = _workout(notes="after the import")
+    later["date"], later["start_time"] = date(2026, 11, 11), time(9, 0)
+    untimed = _workout(notes="no clock")
+    untimed["date"] = date(2026, 11, 11)
+
+    async def fake_collect(session, user_id, since):
+        return [early, later, untimed]
+
+    # импорт был 2026-11-11 01:30 по часам пользователя (UTC+3)
+    monkeypatch.setattr(handlers, "collect_workouts", fake_collect)
+    asyncio.run(state.set_state(ExportStates.entering_wishes))
+    asyncio.run(state.set_data({"period": "program"}))
+    call = FakeCall()
+    asyncio.run(handlers.cb_wishes_skip(call, state, session, _user()))
+    prompt, _ = call.message.documents[-1]
+    assert "before the import" not in prompt
+    assert "after the import" in prompt
+    assert "no clock" in prompt
 
 
 def test_program_period_without_program(export):

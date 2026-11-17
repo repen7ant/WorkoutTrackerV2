@@ -1,5 +1,5 @@
 from aiogram import F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,18 +21,11 @@ from bot.catalog.repository import ExerciseRepository
 from bot.catalog.service import add_exercise, delete_exercise
 from bot.catalog.states import ExerciseAdd, ExerciseSearch
 from bot.common.formatting import escape
-from bot.filters import ExState
+from bot.filters import WORKOUT_IDLE, ExState
 from bot.users.models import User
-from bot.workouts.states import WorkoutSession
 
 router = Router(name="exercises")
 PER_PAGE = 20
-
-# Диалоги упражнений живут на своей FSM-дорожке (ex_state) и не трогают
-# состояние тренировки. Но текстовое сообщение — общий ресурс: если тренировка
-# ждёт ввод, он принадлежит ей. В WorkoutSession.active тренировка управляется
-# кнопками, текст ей не нужен.
-WORKOUT_IDLE = StateFilter(None, WorkoutSession.active)
 
 
 async def send_exercise_page(

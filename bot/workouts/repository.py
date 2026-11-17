@@ -169,6 +169,14 @@ class WorkoutRepository:
             filters.append(Workout.date >= since)
         return await self._load(*filters)
 
+    async def exists_since(self, user_id: int, since: date | None) -> bool:
+        """Есть ли тренировки с даты since — без загрузки лога."""
+        filters = [Workout.user_id == user_id]
+        if since is not None:
+            filters.append(Workout.date >= since)
+        row = await self.session.scalar(select(Workout.id).where(*filters).limit(1))
+        return row is not None
+
     async def with_exercise(
         self, exercise_id: int, user_id: int, limit: int | None = 10
     ) -> list[LoggedWorkout]:

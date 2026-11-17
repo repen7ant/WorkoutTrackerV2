@@ -5,6 +5,9 @@ from decimal import Decimal
 
 from bot.workouts.domain import SetEntry, duration_minutes
 
+# длиннее Telegram режет текст на несколько сообщений (лимит 4096), с запасом
+MAX_MESSAGE_LENGTH = 4000
+
 
 def escape(text: str) -> str:
     """Текст пользователя для сообщений с parse_mode="HTML"."""

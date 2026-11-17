@@ -67,6 +67,11 @@ async def collect_workouts(
     ]
 
 
+async def has_workouts(session: AsyncSession, user_id: int, since: date | None) -> bool:
+    """Есть ли тренировки с даты since — без загрузки лога."""
+    return await WorkoutRepository(session).exists_since(user_id, since)
+
+
 async def catalog_exercises(
     session: AsyncSession, user_id: int
 ) -> dict[str, list[str]]:

@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import ExerciseInfo
-from bot.programs.domain import ProgramPlan
+from bot.programs.domain import PlanExercise, ProgramPlan
 from bot.programs.models import (
     Program,
     ProgramDay,
@@ -110,33 +110,44 @@ class ProgramRepository:
         program = Program(user_id=user_id, weeks=plan.weeks)
         self.session.add(program)
         await self.session.flush()
-        for day_pos, day in enumerate(plan.days, start=1):
-            day_row = ProgramDay(program_id=program.id, position=day_pos, name=day.name)
-            self.session.add(day_row)
-            await self.session.flush()
+        # по flush на уровень, а не на строку: id нужны только уровню ниже
+        day_rows = [
+            ProgramDay(program_id=program.id, position=day_pos, name=day.name)
+            for day_pos, day in enumerate(plan.days, start=1)
+        ]
+        self.session.add_all(day_rows)
+        await self.session.flush()
+        ex_rows: list[tuple[ProgramExercise, PlanExercise]] = []
+        for day_row, day in zip(day_rows, plan.days, strict=True):
             for ex_pos, ex in enumerate(day.exercises, start=1):
                 info = exercises[ex.name.casefold()]
-                ex_row = ProgramExercise(
-                    day_id=day_row.id,
-                    position=ex_pos,
-                    exercise_id=info.id,
-                    exercise_name=info.name,
-                    notes=ex.notes,
-                )
-                self.session.add(ex_row)
-                await self.session.flush()
-                self.session.add_all(
-                    ProgramSet(
-                        program_exercise_id=ex_row.id,
-                        week=week,
-                        position=set_pos,
-                        weight=s.weight,
-                        reps=s.reps,
-                        seconds=s.seconds,
+                ex_rows.append(
+                    (
+                        ProgramExercise(
+                            day_id=day_row.id,
+                            position=ex_pos,
+                            exercise_id=info.id,
+                            exercise_name=info.name,
+                            notes=ex.notes,
+                        ),
+                        ex,
                     )
-                    for week, sets in enumerate(ex.weeks, start=1)
-                    for set_pos, s in enumerate(sets, start=1)
                 )
+        self.session.add_all(row for row, _ in ex_rows)
+        await self.session.flush()
+        self.session.add_all(
+            ProgramSet(
+                program_exercise_id=ex_row.id,
+                week=week,
+                position=set_pos,
+                weight=s.weight,
+                reps=s.reps,
+                seconds=s.seconds,
+            )
+            for ex_row, ex in ex_rows
+            for week, sets in enumerate(ex.weeks, start=1)
+            for set_pos, s in enumerate(sets, start=1)
+        )
         await self.session.flush()
 
     async def delete(self, user_id: int) -> bool:

@@ -11,7 +11,6 @@ from typing import Any
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.exc import SQLAlchemyError
@@ -19,7 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.catalog.api import MUSCLES_PROMPT, Catalog, parse_muscle_names
 from bot.catalog.service import add_exercise
-from bot.filters import ExState
+from bot.common.formatting import MAX_MESSAGE_LENGTH
+from bot.filters import WORKOUT_IDLE, ExState
 from bot.programs.domain import InvalidProgram, ProgramPlan, week_count
 from bot.programs.draft import decode_txt, plan_from_fsm, plan_to_fsm
 from bot.programs.keyboards import (
@@ -38,21 +38,14 @@ from bot.programs.service import (
 )
 from bot.programs.states import ProgramImport
 from bot.users.models import User
-from bot.workouts.states import WorkoutSession
 
 router = Router(name="program_import")
 
-# текст, пока тренировка ждёт ввода, принадлежит ей: иначе программа ушла бы
-# в заметку к упражнению
-WORKOUT_IDLE = StateFilter(None, WorkoutSession.active)
 # команды проходят дальше: /workout или /program посреди мастера — не поиск
 NOT_COMMAND = ~F.text.startswith("/")
 # первая строка — маркер; рамку ``` вокруг блока допускаем
 IS_PROGRAM = F.text.func(has_program_marker)
 MAX_FILE_SIZE = 64 * 1024
-# длиннее Telegram сам режет текст на несколько сообщений: начало программы
-# пришло бы без конца
-MAX_MESSAGE_LENGTH = 4000
 
 
 def _question(name: str) -> str:
