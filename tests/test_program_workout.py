@@ -478,6 +478,19 @@ def test_finish_plan_exercise_without_sets_is_skip(monkeypatch):
     assert plan_todo(data) == [(0, "Bench Press"), (2, "Bench Press")]
 
 
+def test_finish_plan_exercise_with_note_warns(monkeypatch):
+    """Заметка без подходов не должна молча пропасть при пропуске упражнения."""
+    state, _ = _open_plan_exercise(monkeypatch, 0)
+    asyncio.run(state.update_data(current_notes="shoulder hurts"))
+    call = FakeCall()
+    asyncio.run(recording.cb_finish_exercise(call, state))
+    assert call.alerts == [
+        "Add a set, or remove the note: it isn't saved without sets."
+    ]
+    assert asyncio.run(state.get_state()) == WorkoutSession.entering_sets
+    assert asyncio.run(state.get_data())["current_notes"] == "shoulder hurts"
+
+
 def test_done_plan_exercise_button_is_ignored(monkeypatch):
     state, _ = _open_plan_exercise(monkeypatch, 0)
     asyncio.run(recording.cb_plan_set(FakeCall(), WkPlanSet(idx=0), state))

@@ -459,9 +459,16 @@ async def cb_finish_exercise(call: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     plan_index = data.get("current_plan_index")
     current_sets = data.get("current_sets")
-    if not current_sets and plan_index is None:
-        await call.answer("Add at least one set first.", show_alert=True)
-        return
+    if not current_sets:
+        if plan_index is None:
+            await call.answer("Add at least one set first.", show_alert=True)
+            return
+        if data.get("current_notes"):
+            await call.answer(
+                "Add a set, or remove the note: it isn't saved without sets.",
+                show_alert=True,
+            )
+            return
     exercises = data.get("exercises", [])
     # упражнение из плана без подходов — пропуск: в тренировку не попадает
     if current_sets:
