@@ -280,6 +280,8 @@ async def cb_save(
         await call.answer()
         return
     data = await ex_state.get_data()
+    # до попытки сохранить: после ошибки БД сессия уже не ответит
+    replacing = await get_program(session, db_user.id) is not None
     try:
         await import_program(
             session, db_user.id, plan_from_fsm(data["plan"]), data["matched"]
@@ -293,11 +295,7 @@ async def cb_save(
         return
     except SQLAlchemyError:
         with suppress(TelegramBadRequest):
-            await call.message.edit_reply_markup(
-                reply_markup=confirm_kb(
-                    await get_program(session, db_user.id) is not None
-                )
-            )
+            await call.message.edit_reply_markup(reply_markup=confirm_kb(replacing))
         raise
     await ex_state.clear()
     await call.message.edit_text("Program saved. Start it with /workout.")

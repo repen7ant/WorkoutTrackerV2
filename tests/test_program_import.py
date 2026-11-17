@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import EditMessageReplyMarkup
+from sqlalchemy.exc import PendingRollbackError, SQLAlchemyError
 
 from bot.catalog.api import ExerciseInfo, rank_similar
 from bot.common.formatting import escape
@@ -252,6 +253,36 @@ def test_wizard_asks_unmatched_then_saves(wizard):
     assert exercise_ids == {"bench press": 1, "plank": 2, "romanian deadlift": 3}
     assert save.message.sent[-1].text == "Program saved. Start it with /workout."
     assert asyncio.run(state.get_state()) is None
+
+
+def test_save_db_error_restores_confirm_kb(wizard, monkeypatch):
+    """После ошибки БД сессия мертва: кнопки чинить без неё, ошибку не прятать."""
+    state, saved = wizard
+    broken = SQLAlchemyError("deadlock")
+
+    async def failing_import(session, user_id, plan, exercise_ids):
+        saved["dead"] = True
+        raise broken
+
+    async def dead_after_failure(session, user_id):
+        if saved.get("dead"):
+            raise PendingRollbackError("rollback first")
+        return None
+
+    monkeypatch.setattr(import_, "import_program", failing_import)
+    monkeypatch.setattr(import_, "get_program", dead_after_failure)
+    asyncio.run(import_.on_program_text(FakeMessage(PROGRAM), state, None, USER))
+    asyncio.run(
+        import_.cb_pick(
+            FakeCall(FakeMessage()), ImportPick(exercise_id=3, left=1), state, None, USER
+        )
+    )
+    save = FakeCall(FakeMessage())
+    with pytest.raises(SQLAlchemyError) as err:
+        asyncio.run(import_.cb_save(save, state, None, USER))
+    assert err.value is broken
+    assert save.message.kb_removed is False
+    assert asyncio.run(state.get_state()) == ProgramImport.confirming
 
 
 def test_pick_of_unavailable_exercise_is_refused(wizard):
