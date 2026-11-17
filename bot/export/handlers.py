@@ -15,7 +15,7 @@ from bot.export.service import catalog_exercises, collect_workouts
 from bot.export.states import ExportStates
 from bot.filters import ExState
 from bot.programs.formatters import format_progress, render_program
-from bot.programs.parser import PROGRAM_MARKER
+from bot.programs.parser import PROGRAM_MARKER, has_program_marker
 from bot.programs.service import get_program
 from bot.users.models import User
 from bot.users.service import set_ai_wishes
@@ -90,6 +90,8 @@ async def cb_export_period(
     WORKOUT_IDLE,
     F.text,
     ~F.text.startswith("/"),
+    # блок программы — не пожелания: пропустить его до импорта, чей роутер позже
+    ~F.text.func(has_program_marker),
 )
 async def on_wishes(
     message: Message, ex_state: FSMContext, session: AsyncSession, db_user: User

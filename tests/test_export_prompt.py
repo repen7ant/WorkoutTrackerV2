@@ -226,6 +226,26 @@ def test_typed_wishes_are_saved_and_exported(export):
     assert asyncio.run(state.get_state()) is None
 
 
+def _wishes_matches(text):
+    handler = next(
+        h for h in handlers.router.message.handlers if h.callback is handlers.on_wishes
+    )
+    matched, _ = asyncio.run(
+        handler.check(
+            FakeMessage(text),
+            raw_state=None,
+            ex_raw_state=ExportStates.entering_wishes.state,
+        )
+    )
+    return matched
+
+
+def test_pasted_program_is_not_wishes():
+    """Экспортный роутер стоит раньше импорта: блок программы надо пропустить."""
+    assert _wishes_matches("Full body, 3 days a week")
+    assert not _wishes_matches(PROGRAM_TEXT)
+
+
 def test_too_long_wishes_are_refused(export):
     state, session = export
     user = _user()
